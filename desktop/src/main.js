@@ -265,6 +265,8 @@ function renderGuardPanel(status = "Connect to the deployed AURA Recovery API.")
       recoveryDevices = Array.isArray(result.devices) ? result.devices : [];
       renderGuardPanel("Connected · " + recoveryDevices.length + " registered devices. Account token remains in memory only.");
     } catch (error) {
+      recoveryToken = "";
+      recoveryDevices = [];
       renderGuardPanel("Connection failed: " + String(error));
     }
   });
