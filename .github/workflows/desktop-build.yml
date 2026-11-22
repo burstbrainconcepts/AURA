@@ -40,6 +40,9 @@ jobs:
       - name: Install frontend dependencies
         working-directory: desktop
         run: npm install
+      - name: Generate platform icons
+        working-directory: desktop
+        run: npm run tauri -- icon src-tauri/icons/aura.svg
       - name: Build desktop application
         working-directory: desktop
         run: npm run tauri -- build
