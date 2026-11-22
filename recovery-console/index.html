@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>AURA Recovery Console</title>
+  <link rel="stylesheet" href="/console/styles.css">
+  <script src="/console/app.js" defer></script>
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div class="brand-mark">A</div>
+      <div>
+        <p class="eyebrow">BURST BRAIN CONCEPTS</p>
+        <h1>AURA <span>Recovery</span></h1>
+      </div>
+      <span class="secure-label">HTTPS · PRIVATE CONSOLE</span>
+    </header>
+
+    <section class="intro">
+      <p class="eyebrow">DEVICE CONTROL CENTER</p>
+      <h2>Your devices. Your authority.</h2>
+      <p>Review enrolled devices, see their latest consented location, and send signed recovery commands.</p>
+    </section>
+
+    <section class="auth-panel panel">
+      <label for="account-token">Account API token</label>
+      <div class="auth-row">
+        <input id="account-token" type="password" autocomplete="off" spellcheck="false" placeholder="Paste your private account token">
+        <button id="connect" class="primary">Connect</button>
+        <button id="disconnect" class="secondary" disabled>Disconnect</button>
+      </div>
+      <p class="hint">The token stays in this page's memory and is not saved in browser storage.</p>
+    </section>
+
+    <section class="device-section">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">YOUR REGISTRY</p>
+          <h2>Enrolled devices</h2>
+        </div>
+        <button id="refresh" class="secondary" disabled>Refresh</button>
+      </div>
+      <p id="status" class="status" role="status">Connect with your account token to load devices.</p>
+      <div id="devices" class="device-grid"></div>
+    </section>
+
+    <footer>
+      <p>AURA only performs actions supported by the enrolled device and its operating system permissions. Remote wipe, passcode reset and covert monitoring are not available.</p>
+      <a href="https://github.com/burstbrainconcepts/AURA" target="_blank" rel="noopener noreferrer">AURA source repository</a>
+    </footer>
+  </main>
+</body>
+</html>
