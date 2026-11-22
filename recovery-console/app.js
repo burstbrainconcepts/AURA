@@ -8,7 +8,7 @@ let accountToken = "";
 
 function setStatus(message, error = false) {
   statusNode.textContent = message;
-  statusNode.style.color = error ? "#ff9bb7" : "#aab8d2";
+  statusNode.classList.toggle("error", error);
 }
 
 async function api(path, options = {}) {
