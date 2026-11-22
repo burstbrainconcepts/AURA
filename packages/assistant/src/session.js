@@ -2,7 +2,7 @@ const DEFAULT_SYSTEM_PROMPT = "You are AURA, a helpful private assistant. Be cle
 const MAX_HISTORY_MESSAGES = 40;
 
 export class AssistantSession {
-  constructor({ inference, systemPrompt = DEFAULT_SYSTEM_PROMPT, maxHistoryMessages = MAX_HISTORY_MESSAGES, memory = null } = {}) {
+  constructor({ inference, systemPrompt = DEFAULT_SYSTEM_PROMPT, maxHistoryMessages = MAX_HISTORY_MESSAGES, memory = null, toolRegistry = null } = {}) {
     if (!inference || typeof inference.chat !== "function") {
       throw new TypeError("An inference adapter with a chat() method is required");
     }
@@ -15,7 +15,11 @@ export class AssistantSession {
     this.inference = inference;
     this.systemPrompt = systemPrompt;
     this.maxHistoryMessages = maxHistoryMessages;
+    if (toolRegistry !== null && typeof toolRegistry.execute !== "function") {
+      throw new TypeError("toolRegistry must provide an execute() method");
+    }
     this.memory = memory;
+    this.toolRegistry = toolRegistry;
     this.messages = [];
     this.pending = false;
   }
@@ -27,6 +31,11 @@ export class AssistantSession {
   clear() {
     if (this.pending) throw new Error("Cannot clear a conversation while a response is pending");
     this.messages = [];
+  }
+
+  async executeTool(name, input, context = {}) {
+    if (!this.toolRegistry) throw new Error("No tool registry is configured for this session");
+    return this.toolRegistry.execute(name, input, context);
   }
 
   async send(text, options = {}) {
