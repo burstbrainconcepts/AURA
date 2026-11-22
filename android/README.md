@@ -1,5 +1,7 @@
 # AURA Android
 
-The Android application is a native Kotlin launcher scaffold (minSdk 24, targetSdk 35). It intentionally does not claim device-admin, location, microphone, or background privileges until the corresponding user-facing feature and permission flow are implemented.
+The Android project is a native Kotlin application shell (minSdk 24, targetSdk 35) with a basic chat interface for a local llama.cpp server exposing the OpenAI-compatible `/v1/chat/completions` endpoint at `http://localhost:8080`.
 
-Build on GitHub Actions with the **Android cloud build** workflow. A local build, if desired, is `gradle -p android :app:assembleDebug`. The debug APK is written to `android/app/build/outputs/apk/debug/`.
+The app permits cleartext traffic only for the localhost inference endpoint. It does not upload conversation text to a cloud service. It currently expects the local inference engine to be supplied separately; llama.cpp is not yet compiled into the APK, and no model weights are bundled. Therefore the APK can be built in the cloud, but chat generation requires a compatible local engine to be running.
+
+Builds are configured in GitHub Actions. The debug APK artifact is produced at `android/app/build/outputs/apk/debug/`.
