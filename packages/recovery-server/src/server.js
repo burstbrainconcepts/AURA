@@ -212,8 +212,11 @@ async function route(req, res) {
         );
       }
       await client.query("UPDATE aura_enrollment_challenges SET consumed_at = NOW() WHERE id = $1", [challenge.id]);
+      await client.query(
+        "INSERT INTO aura_audit_events (account_id, device_id, event_type, metadata) VALUES ($1, $2, $3, $4::jsonb)",
+        [account.id, challenge.device_id, "device.enrolled", JSON.stringify({ platform: challenge.platform, capabilities })]
+      );
       await client.query("COMMIT");
-      await audit(account.id, challenge.device_id, "device.enrolled", { platform: challenge.platform, capabilities });
       return send(res, 201, {
         deviceId: challenge.device_id,
         deviceToken: token,
