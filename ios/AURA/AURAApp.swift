@@ -251,9 +251,131 @@ struct AURAApp: App {
     }
 }
 
+
+struct AuraRecoveryDevice: Decodable, Identifiable {
+    let id: String
+    let platform: String
+    let label: String
+    let capabilities: [String]
+    let lastSeenAt: String?
+    let revokedAt: String?
+    let latitude: Double?
+    let longitude: Double?
+    let locationUpdatedAt: String?
+}
+private struct AuraRecoveryDeviceList: Decodable { let devices: [AuraRecoveryDevice] }
+private struct AuraRecoveryCommandRequest: Encodable {
+    let deviceId: String
+    let command: String
+    let userApproved: Bool
+    let ttlMs: Int
+}
+@MainActor
+final class AuraRecoveryModel: ObservableObject {
+    @Published var baseURL = UserDefaults.standard.string(forKey: "aura.recovery.url") ?? ""
+    @Published var accountToken = ""
+    @Published private(set) var devices: [AuraRecoveryDevice] = []
+    @Published var status = "Connect to your deployed AURA Recovery API."
+    private let tokenService = "com.burstbrainconcepts.aura.recovery"
+    private let tokenAccount = "account-token"
+    init() { accountToken = readToken() ?? "" }
+
+    func connect() async {
+        let token = accountToken.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard token.count >= 32 else { status = "Enter the account API token."; return }
+        do {
+            let data = try await request(path: "/v1/devices", method: "GET", token: token)
+            let decoder = JSONDecoder()
+            decoder.keyDecodingStrategy = .convertFromSnakeCase
+            let result = try decoder.decode(AuraRecoveryDeviceList.self, from: data)
+            devices = result.devices
+            UserDefaults.standard.set(baseURL, forKey: "aura.recovery.url")
+            try saveToken(token)
+            accountToken = token
+            status = "Connected · \(devices.count) registered devices."
+        } catch { status = "Recovery connection failed: " + error.localizedDescription }
+    }
+
+    func queueCommand(deviceId: String, command: String) async {
+        guard ["device.lock", "location.refresh"].contains(command) else {
+            status = "This recovery command is not enabled in the client."
+            return
+        }
+        do {
+            let body = AuraRecoveryCommandRequest(deviceId: deviceId, command: command, userApproved: true, ttlMs: 300_000)
+            let data = try JSONEncoder().encode(body)
+            _ = try await request(path: "/v1/commands", method: "POST", body: data)
+            status = "Command queued for \(deviceId). The device must be online and accept the signed command before execution."
+        } catch { status = "Could not queue command: " + error.localizedDescription }
+    }
+
+    func revoke(deviceId: String) async {
+        do {
+            _ = try await request(path: "/v1/devices/\(deviceId)/revoke", method: "POST")
+            status = "Device credentials revoked."
+            await connect()
+        } catch { status = "Revocation failed: " + error.localizedDescription }
+    }
+
+    func clearLocation(deviceId: String) async {
+        do {
+            _ = try await request(path: "/v1/devices/\(deviceId)/location/clear", method: "POST")
+            status = "Stored location cleared."
+            await connect()
+        } catch { status = "Could not clear location: " + error.localizedDescription }
+    }
+
+    private func request(path: String, method: String, token: String? = nil, body: Data? = nil) async throws -> Data {
+        let clean = baseURL.trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard let base = URL(string: clean), let scheme = base.scheme?.lowercased(),
+              (scheme == "https" || (scheme == "http" && ["localhost", "127.0.0.1"].contains(base.host ?? ""))),
+              base.user == nil, base.password == nil else {
+            throw NSError(domain: "AURA.Recovery", code: 1, userInfo: [NSLocalizedDescriptionKey: "Use an HTTPS recovery URL. HTTP is allowed only for localhost development."])
+        }
+        guard !path.contains("..") else { throw NSError(domain: "AURA.Recovery", code: 2) }
+        var request = URLRequest(url: URL(string: clean + path)!)
+        request.httpMethod = method
+        request.timeoutInterval = 20
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let token = token ?? (accountToken.isEmpty ? nil : accountToken) {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        if let body {
+            request.httpBody = body
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        }
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw NSError(domain: "AURA.Recovery", code: (response as? HTTPURLResponse)?.statusCode ?? 3, userInfo: [NSLocalizedDescriptionKey: "Recovery API returned an error response."])
+        }
+        return data
+    }
+
+    private func saveToken(_ token: String) throws {
+        let data = Data(token.utf8)
+        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: tokenService, kSecAttrAccount as String: tokenAccount]
+        SecItemDelete(query as CFDictionary)
+        var add = query
+        add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        add[kSecValueData as String] = data
+        let result = SecItemAdd(add as CFDictionary, nil)
+        guard result == errSecSuccess else { throw NSError(domain: NSOSStatusErrorDomain, code: Int(result)) }
+    }
+
+    private func readToken() -> String? {
+        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: tokenService, kSecAttrAccount as String: tokenAccount, kSecReturnData as String: true, kSecMatchLimit as String: kSecMatchLimitOne]
+        var result: CFTypeRef?
+        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess, let data = result as? Data else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+}
+
 struct ContentView: View {
     @StateObject private var assistant = AuraAssistantModel()
     @StateObject private var memoryVault = AuraMemoryVault()
+    @StateObject private var recovery = AuraRecoveryModel()
+    @State private var pendingDevice: AuraRecoveryDevice?
+    @State private var pendingCommand = ""
     @State private var memoryDraft = ""
     @State private var selectedTab = 0
     @State private var message = ""
@@ -286,6 +408,19 @@ struct ContentView: View {
             }
         }
         .task { await assistant.checkHealth() }
+        .confirmationDialog("Confirm remote command", isPresented: Binding(
+            get: { pendingDevice != nil },
+            set: { if !$0 { pendingDevice = nil; pendingCommand = "" } }
+        ), titleVisibility: .visible) {
+            Button(pendingCommand == "device.lock" ? "Queue device lock" : "Queue location refresh", role: .destructive) {
+                guard let device = pendingDevice else { return }
+                Task { await recovery.queueCommand(deviceId: device.id, command: pendingCommand) }
+                pendingDevice = nil
+            }
+            Button("Cancel", role: .cancel) { pendingDevice = nil }
+        } message: {
+            Text("This queues a signed, expiring command. It does not guarantee execution; the target device must be online and have the required capability.")
+        }
     }
 
     private var assistantView: some View {
@@ -373,7 +508,52 @@ struct ContentView: View {
     }
 
     private var guardView: some View {
-        infoPage(icon: "shield.lefthalf.filled", title: "Device protection", detail: "AURA Guard uses runtime capability discovery. Device management, recovery, check-ins and protection features will be evaluated against the current device, account, configured entitlements and applicable agreements.")
+        VStack(alignment: .leading, spacing: 12) {
+            Text("AURA Guard").font(.system(size: 27, weight: .semibold, design: .rounded))
+            Text("Connect to your recovery service to manage registered devices.").font(.subheadline).foregroundStyle(.secondary)
+            TextField("https://your-recovery-host", text: $recovery.baseURL)
+                .textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
+                .padding(12).background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 10))
+            SecureField("Account API token", text: $recovery.accountToken)
+                .textInputAutocapitalization(.never).autocorrectionDisabled()
+                .padding(12).background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 10))
+            Button("Connect and refresh devices") { Task { await recovery.connect() } }
+                .buttonStyle(.borderedProminent).tint(.indigo)
+            Text(recovery.status).font(.caption).foregroundStyle(.secondary)
+            List {
+                ForEach(recovery.devices) { device in
+                    VStack(alignment: .leading, spacing: 7) {
+                        HStack {
+                            Text(device.label.isEmpty ? device.id : device.label).font(.headline)
+                            Spacer()
+                            Text(device.platform.uppercased()).font(.caption2).foregroundStyle(.secondary)
+                        }
+                        Text(device.revokedAt == nil ? "Registered" : "Revoked")
+                            .font(.caption).foregroundStyle(device.revokedAt == nil ? .green : .red)
+                        if let seen = device.lastSeenAt { Text("Last seen: " + seen).font(.caption2).foregroundStyle(.secondary) }
+                        if let lat = device.latitude, let lon = device.longitude {
+                            Text("Last consented location: \(lat), \(lon)").font(.caption2).foregroundStyle(.secondary)
+                            Button("Clear stored location", role: .destructive) {
+                                Task { await recovery.clearLocation(deviceId: device.id) }
+                            }.font(.caption)
+                        }
+                        HStack {
+                            if device.capabilities.contains("device.lock.supported") {
+                                Button("Lock") { pendingDevice = device; pendingCommand = "device.lock" }
+                                    .buttonStyle(.bordered).tint(.orange)
+                            }
+                            if device.capabilities.contains("device.location.user_consented") {
+                                Button("Refresh location") { pendingDevice = device; pendingCommand = "location.refresh" }
+                                    .buttonStyle(.bordered)
+                            }
+                            Button("Revoke", role: .destructive) {
+                                Task { await recovery.revoke(deviceId: device.id) }
+                            }.font(.caption)
+                        }
+                    }.listRowBackground(Color.white.opacity(0.04))
+                }
+            }.scrollContentBackground(.hidden)
+        }.padding(18)
     }
 
     private var settings: some View {
