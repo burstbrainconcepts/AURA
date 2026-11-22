@@ -40,22 +40,24 @@ app.innerHTML = `
 const heading = document.querySelector("#heading");
 const panel = document.querySelector("#panel");
 const welcome = document.querySelector("#welcome");
-const messagesEl = document.querySelector("#messages");
 const statusEl = document.querySelector("#engine-status");
 const tagEl = document.querySelector("#runtime-tag");
 const labels = { assistant: "Your assistant", memory: "Private memory", guard: "Device Guard", settings: "Settings" };
 
 function setStatus(online, detail = "") {
-  statusEl.innerHTML = online ? "<i></i> Local engine connected" : "<i></i> Local engine offline";
-  statusEl.title = detail;
-  tagEl.textContent = online ? "Connected" : "Not connected";
+  document.querySelector("#engine-status").innerHTML = online ? "<i></i> Local engine connected" : "<i></i> Local engine offline";
+  document.querySelector("#engine-status").title = detail;
+  const currentTag = document.querySelector("#runtime-tag");
+  if (currentTag) currentTag.textContent = online ? "Connected" : "Not connected";
 }
 function appendMessage(role, content) {
   const item = document.createElement("p");
   item.className = role === "user" ? "user-message" : "assistant-message";
   item.textContent = content;
-  messagesEl.append(item);
-  messagesEl.scrollTop = messagesEl.scrollHeight;
+  const target = document.querySelector("#messages");
+  if (!target) return;
+  target.append(item);
+  target.scrollTop = target.scrollHeight;
 }
 async function checkEngine() {
   try {
@@ -76,7 +78,7 @@ async function sendMessage(value) {
   const pending = document.createElement("p");
   pending.className = "empty";
   pending.textContent = "AURA is thinking locally…";
-  messagesEl.append(pending);
+  document.querySelector("#messages").append(pending);
   try {
     const answer = await invoke("local_chat", { baseUrl: endpoint, messages: history.slice(-40) });
     pending.remove();
@@ -107,12 +109,12 @@ function showAssistant() {
     input.value = "";
     sendMessage(value);
   });
-  messagesEl.replaceChildren();
+  document.querySelector("#messages").replaceChildren();
   if (!history.length) {
     const empty = document.createElement("p");
     empty.className = "empty";
     empty.textContent = "Your conversation will appear here.";
-    messagesEl.append(empty);
+    document.querySelector("#messages").append(empty);
   } else {
     history.forEach((message) => appendMessage(message.role, message.content));
   }
@@ -127,10 +129,11 @@ function showPanel(view) {
       <div class="panel-head"><div><h3>Local AI runtime</h3><p class="muted">Configure the llama.cpp OpenAI-compatible server running on this computer.</p></div></div>
       <form id="settings-form" class="settings-form">
         <label for="endpoint">Inference server URL</label>
-        <input id="endpoint" value="${endpoint}" spellcheck="false" autocomplete="url" />
+        <input id="endpoint" spellcheck="false" autocomplete="url" />
         <div class="settings-actions"><button type="submit">Save endpoint</button><button type="button" id="test-endpoint" class="secondary">Test connection</button></div>
         <p class="hint" id="settings-result">For security, the desktop native bridge currently accepts localhost endpoints only.</p>
       </form>`;
+    document.querySelector("#endpoint").value = endpoint;
     document.querySelector("#settings-form").addEventListener("submit", async (event) => {
       event.preventDefault();
       const next = document.querySelector("#endpoint").value.trim();
