@@ -241,10 +241,20 @@ class MainActivity : Activity() {
             return
         }
         if (recovery.isLocationOptIn()) {
-            AlertDialog.Builder(this).setTitle("Disable recovery location?")
-                .setMessage("AURA will stop sending location check-ins. You can clear the last saved location from the account API.")
-                .setNegativeButton("Keep enabled", null)
-                .setPositiveButton("Disable") { _, _ -> updateLocationConsent(false) }.show()
+            if (Build.VERSION.SDK_INT >= 29 && checkSelfPermission(android.Manifest.permission.ACCESS_BACKGROUND_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                AlertDialog.Builder(this).setTitle("Background location permission needed")
+                    .setMessage("AURA location check-ins are enabled, but Android is not allowing background location. Open app settings and choose Allow all the time, or disable location recovery.")
+                    .setNegativeButton("Disable") { _, _ -> updateLocationConsent(false) }
+                    .setPositiveButton("Open settings") { _, _ ->
+                        pendingLocationSettings = true
+                        startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.fromParts("package", packageName, null)))
+                    }.show()
+            } else {
+                AlertDialog.Builder(this).setTitle("Disable recovery location?")
+                    .setMessage("AURA will stop sending location check-ins and clear the last saved location from your recovery account.")
+                    .setNegativeButton("Keep enabled", null)
+                    .setPositiveButton("Disable") { _, _ -> updateLocationConsent(false) }.show()
+            }
             return
         }
         AlertDialog.Builder(this).setTitle("Enable lost-device location check-ins?")
