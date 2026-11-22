@@ -82,4 +82,4 @@ All command signatures cover a canonical envelope containing the version, comman
 
 ## Integration status
 
-The server API and database schema are implemented. The Android app still needs its device-key enrollment UI, encrypted device-token storage, polling worker, signature verification, and remote-command execution bridge before end-to-end remote recovery is operational.
+The Android app now includes device-key enrollment, encrypted device credentials, server-signature verification, replay protection, WorkManager polling, lock execution and consented location refresh. The browser console is served at `/console`. End-to-end operation still requires deploying this API with PostgreSQL and server secrets, building/installing the Android app, enrolling a device and testing against a real Android device. A successful cloud APK build and live server deployment have not yet been verified.
