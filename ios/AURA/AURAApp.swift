@@ -726,19 +726,21 @@ struct ContentView: View {
                                 pendingClearLocationID = device.id
                             }.font(.caption)
                         }
-                        HStack {
-                            if device.capabilities.contains("device.lock.supported") {
-                                Button("Lock") { pendingDevice = device; pendingCommand = "device.lock" }
-                                    .buttonStyle(.bordered).tint(.orange)
+                        if device.revokedAt == nil {
+                            HStack {
+                                if device.capabilities.contains("device.lock.supported") {
+                                    Button("Lock") { pendingDevice = device; pendingCommand = "device.lock" }
+                                        .buttonStyle(.bordered).tint(.orange)
+                                }
+                                if device.capabilities.contains("device.location.user_consented") {
+                                    Button("Refresh location") { pendingDevice = device; pendingCommand = "location.refresh" }
+                                        .buttonStyle(.bordered)
+                                }
+                                Button("Revoke", role: .destructive) {
+                                    pendingRevokeID = device.id
+                                    showRevokeAlert = true
+                                }.font(.caption)
                             }
-                            if device.capabilities.contains("device.location.user_consented") {
-                                Button("Refresh location") { pendingDevice = device; pendingCommand = "location.refresh" }
-                                    .buttonStyle(.bordered)
-                            }
-                            Button("Revoke", role: .destructive) {
-                                pendingRevokeID = device.id
-                                showRevokeAlert = true
-                            }.font(.caption)
                         }
                     }.listRowBackground(Color.white.opacity(0.04))
                 }
