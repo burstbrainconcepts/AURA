@@ -27,7 +27,7 @@ jobs:
     timeout-minutes: 90
     steps:
       - name: Checkout AURA
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           submodules: false
       - name: Fetch pinned llama.cpp source
@@ -38,14 +38,23 @@ jobs:
           git -C upstream/engines/llama.cpp fetch --depth 1 origin 94f3af3d09e74a0fb35f703194318d3b4037714a
           git -C upstream/engines/llama.cpp checkout --detach 94f3af3d09e74a0fb35f703194318d3b4037714a
       - name: Set up Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-      - name: Install Android NDK and CMake
-        run: sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;27.2.12479018" "cmake;3.22.1"
+      - name: Configure Android SDK
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          test -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses
+      - name: Install Android SDK components
+        run: |
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install \
+            "platforms;android-35" \
+            "build-tools;35.0.0" \
+            "ndk;27.2.12479018" \
+            "cmake;3.22.1"
       - name: Verify pinned llama.cpp checkout
         run: test -f upstream/engines/llama.cpp/include/llama.h && git -C upstream/engines/llama.cpp rev-parse HEAD
       - name: Set up Gradle
