@@ -19,10 +19,8 @@ jobs:
   debug-apk:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout AURA and pinned upstreams
+      - name: Checkout AURA
         uses: actions/checkout@v4
-        with:
-          submodules: recursive
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
@@ -30,6 +28,8 @@ jobs:
           java-version: "17"
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
       - name: Assemble debug APK
         working-directory: android
         run: gradle :app:assembleDebug
