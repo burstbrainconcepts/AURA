@@ -305,6 +305,14 @@ final class AuraRecoveryModel: ObservableObject {
         value.range(of: "^[A-Za-z0-9._:-]{8,128}$", options: .regularExpression) != nil
     }
 
+    func disconnect() {
+        accountToken = ""
+        devices = []
+        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: tokenService, kSecAttrAccount as String: tokenAccount]
+        SecItemDelete(query as CFDictionary)
+        status = "Disconnected. The saved account token was removed from Keychain."
+    }
+
     func queueCommand(deviceId: String, command: String) async {
         guard validDeviceId(deviceId) else { status = "Invalid device identifier."; return }
         guard ["device.lock", "location.refresh"].contains(command) else {
@@ -553,8 +561,12 @@ struct ContentView: View {
             SecureField("Account API token", text: $recovery.accountToken)
                 .textInputAutocapitalization(.never).autocorrectionDisabled()
                 .padding(12).background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 10))
-            Button("Connect and refresh devices") { Task { await recovery.connect() } }
-                .buttonStyle(.borderedProminent).tint(.indigo)
+            HStack {
+                Button("Connect and refresh") { Task { await recovery.connect() } }
+                    .buttonStyle(.borderedProminent).tint(.indigo)
+                Button("Disconnect", role: .destructive) { recovery.disconnect() }
+                    .buttonStyle(.bordered)
+            }
             Text(recovery.status).font(.caption).foregroundStyle(.secondary)
             List {
                 ForEach(recovery.devices) { device in
