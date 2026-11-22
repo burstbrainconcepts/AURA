@@ -4,3 +4,5 @@
 .settings-form textarea{width:100%;resize:vertical;min-height:88px;background:#0b1221;border:1px solid #2c3b5a;border-radius:10px;color:#eef2ff;padding:13px;font:inherit;font-size:13px;outline:none}.settings-form textarea:focus{border-color:#829dff}.memory-list{display:grid;gap:10px;margin-top:18px;max-height:360px;overflow:auto}.memory-item{display:grid;grid-template-columns:1fr auto;gap:7px 12px;padding:14px;background:#0b1221;border:1px solid #263552;border-radius:11px}.memory-item p{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px;line-height:1.6}.memory-item small{color:#7f8eaa;font-size:10px}.memory-item button{grid-column:2;grid-row:1 / span 2;align-self:center}
 
 .recovery-actions{display:flex;flex-wrap:wrap;gap:7px;grid-column:1/-1}.recovery-actions button{border:1px solid #344666;border-radius:8px;background:#202d49;color:#dce5ff;padding:8px 10px;font-size:11px;cursor:pointer}.recovery-actions button.danger{border-color:#70404b;background:#3a202a;color:#ffc5ce}
+
+.voice-toggle{display:flex;align-items:center;gap:10px;color:#c3cee5;font-size:12px}.voice-toggle input{width:16px;height:16px;accent-color:#829dff}
