@@ -5,6 +5,7 @@ use pbkdf2::pbkdf2_hmac;
 use rand::RngCore;
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
 use sha2::Sha256;
 use std::{fs, path::PathBuf, time::Duration};
 use tauri::{AppHandle, Manager};
@@ -147,6 +148,89 @@ fn memory_clear(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+
+fn validate_recovery_url(value: &str) -> Result<Url, String> {
+    let url = Url::parse(value).map_err(|_| "Enter a valid recovery service URL".to_string())?;
+    let host = url.host_str().unwrap_or_default();
+    let local_http = url.scheme() == "http" && (host == "localhost" || host == "127.0.0.1");
+    if url.scheme() != "https" && !local_http {
+        return Err("Recovery service must use HTTPS (HTTP is allowed only for localhost development)".into());
+    }
+    if !url.username().is_empty() || url.password().is_some() || url.query().is_some() || url.fragment().is_some() {
+        return Err("Recovery URL must not contain credentials, query strings or fragments".into());
+    }
+    Ok(url)
+}
+
+fn validate_account_token(token: &str) -> Result<(), String> {
+    if token.len() < 32 || token.len() > 4096 {
+        return Err("Account token must contain at least 32 characters".into());
+    }
+    Ok(())
+}
+
+fn validate_device_id(device_id: &str) -> Result<(), String> {
+    let valid = (8..=128).contains(&device_id.len()) &&
+        device_id.bytes().all(|b| b.is_ascii_alphanumeric() || b"._:-".contains(&b));
+    if !valid { return Err("Invalid device identifier".into()); }
+    Ok(())
+}
+
+async fn recovery_response(request: reqwest::RequestBuilder) -> Result<Value, String> {
+    let response = request.send().await.map_err(|e| format!("Recovery request failed: {e}"))?;
+    let status = response.status();
+    let data: Value = response.json().await.unwrap_or_else(|_| json!({}));
+    if !status.is_success() {
+        let detail = data.get("error").and_then(Value::as_str).unwrap_or("request_failed");
+        return Err(format!("Recovery API returned HTTP {}: {}", status.as_u16(), detail));
+    }
+    Ok(data)
+}
+
+#[tauri::command]
+async fn recovery_list_devices(base_url: String, account_token: String) -> Result<Value, String> {
+    validate_account_token(&account_token)?;
+    let mut url = validate_recovery_url(&base_url)?;
+    url.set_path(&format!("{}/v1/devices", url.path().trim_end_matches('/')));
+    let client = reqwest::Client::builder().timeout(Duration::from_secs(20)).build().map_err(|e| e.to_string())?;
+    recovery_response(client.get(url).bearer_auth(account_token)).await
+}
+
+#[tauri::command]
+async fn recovery_queue_command(base_url: String, account_token: String, device_id: String, command: String, user_approved: bool) -> Result<Value, String> {
+    validate_account_token(&account_token)?;
+    validate_device_id(&device_id)?;
+    if !["device.lock", "location.refresh"].contains(&command.as_str()) {
+        return Err("Unsupported recovery command".into());
+    }
+    if !user_approved { return Err("Explicit user approval is required".into()); }
+    let mut url = validate_recovery_url(&base_url)?;
+    url.set_path(&format!("{}/v1/commands", url.path().trim_end_matches('/')));
+    let client = reqwest::Client::builder().timeout(Duration::from_secs(20)).build().map_err(|e| e.to_string())?;
+    let body = json!({ "deviceId": device_id, "command": command, "userApproved": true, "ttlMs": 300000 });
+    recovery_response(client.post(url).bearer_auth(account_token).json(&body)).await
+}
+
+#[tauri::command]
+async fn recovery_revoke_device(base_url: String, account_token: String, device_id: String) -> Result<Value, String> {
+    validate_account_token(&account_token)?;
+    validate_device_id(&device_id)?;
+    let mut url = validate_recovery_url(&base_url)?;
+    url.set_path(&format!("{}/v1/devices/{}/revoke", url.path().trim_end_matches('/'), device_id));
+    let client = reqwest::Client::builder().timeout(Duration::from_secs(20)).build().map_err(|e| e.to_string())?;
+    recovery_response(client.post(url).bearer_auth(account_token)).await
+}
+
+#[tauri::command]
+async fn recovery_clear_location(base_url: String, account_token: String, device_id: String) -> Result<Value, String> {
+    validate_account_token(&account_token)?;
+    validate_device_id(&device_id)?;
+    let mut url = validate_recovery_url(&base_url)?;
+    url.set_path(&format!("{}/v1/devices/{}/location/clear", url.path().trim_end_matches('/'), device_id));
+    let client = reqwest::Client::builder().timeout(Duration::from_secs(20)).build().map_err(|e| e.to_string())?;
+    recovery_response(client.post(url).bearer_auth(account_token)).await
+}
+
 #[tauri::command]
 async fn local_health(base_url: String) -> Result<bool, String> {
     let mut url = validate_local_url(&base_url)?;
@@ -181,7 +265,7 @@ async fn local_chat(base_url: String, messages: Vec<ChatMessage>) -> Result<Stri
 
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![local_health, local_chat, memory_load, memory_save, memory_clear])
+        .invoke_handler(tauri::generate_handler![local_health, local_chat, memory_load, memory_save, memory_clear, recovery_list_devices, recovery_queue_command, recovery_revoke_device, recovery_clear_location])
         .run(tauri::generate_context!())
         .expect("error while running AURA desktop");
 }
