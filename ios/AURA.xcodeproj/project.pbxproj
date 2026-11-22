@@ -6,9 +6,10 @@
   objects = {
     A10000000000000000000001 = {isa = PBXBuildFile; fileRef = A10000000000000000000002; };
     A10000000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AURAApp.swift; sourceTree = "<group>"; };
+    A10000000000000000000013 = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
     A10000000000000000000003 = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AURA.app; sourceTree = BUILT_PRODUCTS_DIR; };
     A10000000000000000000004 = {isa = PBXGroup; children = (A10000000000000000000005, A10000000000000000000006, ); sourceTree = "<group>"; };
-    A10000000000000000000005 = {isa = PBXGroup; path = AURA; sourceTree = "<group>"; children = (A10000000000000000000002, ); };
+    A10000000000000000000005 = {isa = PBXGroup; path = AURA; sourceTree = "<group>"; children = (A10000000000000000000002, A10000000000000000000013, ); };
     A10000000000000000000006 = {isa = PBXGroup; name = Products; sourceTree = "<group>"; children = (A10000000000000000000003, ); };
     A10000000000000000000007 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000001, ); runOnlyForDeploymentPostprocessing = 0; };
     A10000000000000000000008 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
@@ -19,8 +20,8 @@
     A1000000000000000000000F = {isa = XCBuildConfiguration; buildSettings = {ALWAYS_SEARCH_USER_PATHS = NO; CLANG_ENABLE_MODULES = YES; IPHONEOS_DEPLOYMENT_TARGET = 16.0; SDKROOT = iphoneos; SWIFT_VERSION = 5.0;}; name = Debug; };
     A10000000000000000000010 = {isa = XCBuildConfiguration; buildSettings = {ALWAYS_SEARCH_USER_PATHS = NO; CLANG_ENABLE_MODULES = YES; IPHONEOS_DEPLOYMENT_TARGET = 16.0; SDKROOT = iphoneos; SWIFT_VERSION = 5.0;}; name = Release; };
     A1000000000000000000000B = {isa = XCConfigurationList; buildConfigurations = (A10000000000000000000011, A10000000000000000000012, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
-    A10000000000000000000011 = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 2; GENERATE_INFOPLIST_FILE = YES; INFOPLIST_KEY_CFBundleDisplayName = AURA; INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES; INFOPLIST_KEY_UILaunchScreen_Generation = YES; MARKETING_VERSION = 0.2.0; PRODUCT_BUNDLE_IDENTIFIER = com.burstbrainconcepts.aura.ios; PRODUCT_NAME = "$(TARGET_NAME)"; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SWIFT_EMIT_LOC_STRINGS = YES; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2";}; name = Debug; };
-    A10000000000000000000012 = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 2; GENERATE_INFOPLIST_FILE = YES; INFOPLIST_KEY_CFBundleDisplayName = AURA; INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES; INFOPLIST_KEY_UILaunchScreen_Generation = YES; MARKETING_VERSION = 0.2.0; PRODUCT_BUNDLE_IDENTIFIER = com.burstbrainconcepts.aura.ios; PRODUCT_NAME = "$(TARGET_NAME)"; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SWIFT_EMIT_LOC_STRINGS = YES; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2";}; name = Release; };
+    A10000000000000000000011 = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 2; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = AURA/Info.plist; MARKETING_VERSION = 0.2.0; PRODUCT_BUNDLE_IDENTIFIER = com.burstbrainconcepts.aura.ios; PRODUCT_NAME = "$(TARGET_NAME)"; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SWIFT_EMIT_LOC_STRINGS = YES; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2";}; name = Debug; };
+    A10000000000000000000012 = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 2; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = AURA/Info.plist; MARKETING_VERSION = 0.2.0; PRODUCT_BUNDLE_IDENTIFIER = com.burstbrainconcepts.aura.ios; PRODUCT_NAME = "$(TARGET_NAME)"; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SWIFT_EMIT_LOC_STRINGS = YES; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2";}; name = Release; };
   };
   rootObject = A1000000000000000000000C;
 }
