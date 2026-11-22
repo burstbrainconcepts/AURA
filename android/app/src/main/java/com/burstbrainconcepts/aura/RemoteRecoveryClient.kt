@@ -31,6 +31,13 @@ class RemoteRecoveryClient(context: Context) {
     private val store = EncryptedRecoveryStore(app)
     private val deviceAdmin = ComponentName(app, AuraDeviceAdminReceiver::class.java)
 
+    fun isEnrolled(): Boolean {
+        val config = store.read()
+        return config.optString("deviceToken").isNotBlank() && config.optString("serverUrl").isNotBlank() && config.optString("commandServerPublicKeyPem").isNotBlank()
+    }
+
+    fun savedServerUrl(): String = store.read().optString("serverUrl")
+
     fun enroll(serverUrl: String, accountToken: String, label: String = "Android device"): String {
         require(Build.VERSION.SDK_INT >= 33) { "This Android version does not provide the required Ed25519 provider." }
         val base = normalizeServerUrl(serverUrl)
