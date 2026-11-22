@@ -177,16 +177,14 @@ class RemoteRecoveryClient(context: Context) {
         if (envelope.optString("nonce").length !in 20..128) return false
         if (envelope.optString("commandId").isBlank() || envelope.optString("requestedBy").isBlank()) return false
 
-        val canonical = JSONObject()
-            .put("version", envelope.getInt("version"))
-            .put("commandId", envelope.getString("commandId"))
-            .put("deviceId", envelope.getString("deviceId"))
-            .put("command", envelope.getString("command"))
-            .put("issuedAt", envelope.getString("issuedAt"))
-            .put("expiresAt", envelope.getString("expiresAt"))
-            .put("nonce", envelope.getString("nonce"))
-            .put("requestedBy", envelope.getString("requestedBy"))
-            .toString()
+        val canonical = "{\\"version\\":${envelope.getInt("version")},"
+            + "\\"commandId\\":${JSONObject.quote(envelope.getString("commandId"))},"
+            + "\\"deviceId\\":${JSONObject.quote(envelope.getString("deviceId"))},"
+            + "\\"command\\":${JSONObject.quote(envelope.getString("command"))},"
+            + "\\"issuedAt\\":${JSONObject.quote(envelope.getString("issuedAt"))},"
+            + "\\"expiresAt\\":${JSONObject.quote(envelope.getString("expiresAt"))},"
+            + "\\"nonce\\":${JSONObject.quote(envelope.getString("nonce"))},"
+            + "\\"requestedBy\\":${JSONObject.quote(envelope.getString("requestedBy"))}}"
         val keyBytes = Base64.decode(
             serverKeyPem.replace("-----BEGIN PUBLIC KEY-----", "")
                 .replace("-----END PUBLIC KEY-----", "").replace("\\s".toRegex(), ""),
