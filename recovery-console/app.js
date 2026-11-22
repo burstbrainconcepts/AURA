@@ -98,6 +98,9 @@ function renderDevices(devices) {
     if (!device.revoked_at && capabilities.includes("device.lock.supported")) {
       addAction(actions, "Lock device", "danger", () => lockDevice(device));
     }
+    if (!device.revoked_at && capabilities.includes("device.location.user_consented")) {
+      addAction(actions, "Refresh location", "secondary", () => refreshLocation(device));
+    }
     if (!device.revoked_at) {
       addAction(actions, "Revoke device", "secondary", () => revokeDevice(device));
     }
@@ -135,6 +138,20 @@ async function lockDevice(device) {
   }
 }
 
+async function refreshLocation(device) {
+  const confirmed = window.confirm(`Request a fresh location from ${device.label || device.id}? This uses the location permission already granted on that device.`);
+  if (!confirmed) return;
+  setStatus("Requesting signed location refresh...");
+  try {
+    const result = await api("/v1/commands", {
+      method: "POST",
+      body: JSON.stringify({ deviceId: device.id, command: "location.refresh", userApproved: true, ttlMs: 300000 })
+    });
+    setStatus(`Location request queued. It expires at ${formatDate(result.expiresAt)}. Refresh the device list after it checks in.`);
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
 async function revokeDevice(device) {
   if (!window.confirm(`Revoke ${device.label || device.id}? This invalidates its recovery token.`)) return;
   try {
