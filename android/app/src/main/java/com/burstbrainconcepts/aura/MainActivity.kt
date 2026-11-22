@@ -3,6 +3,8 @@ package com.burstbrainconcepts.aura
 import android.app.Activity
 import android.app.AlertDialog
 import android.app.DownloadManager
+import android.app.admin.DevicePolicyManager
+import android.content.ComponentName
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -30,6 +32,8 @@ class MainActivity : Activity() {
     private lateinit var input: EditText
     private lateinit var send: Button
     private lateinit var download: Button
+    private lateinit var protectionButton: Button
+    private lateinit var lockButton: Button
     private lateinit var mic: Button
     private lateinit var speakToggle: Button
     private lateinit var voice: OfflineVoiceController
@@ -41,6 +45,8 @@ class MainActivity : Activity() {
     private var speakReplies = false
     private var activeDownloadId = -1L
     private var modelReady = false
+
+    companion object { private const val REQUEST_DEVICE_ADMIN = 7411 }
 
     private val downloadReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -99,6 +105,20 @@ class MainActivity : Activity() {
             text = "Download starter AI model (about 398 MB)"
             setOnClickListener { confirmModelDownload() }
         }
+        val deviceControls = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+        }
+        protectionButton = Button(this).apply {
+            text = "Enable device lock"
+            setOnClickListener { requestDeviceAdmin() }
+        }
+        lockButton = Button(this).apply {
+            text = "Lock now"
+            isEnabled = false
+            setOnClickListener { confirmDeviceLock() }
+        }
+        deviceControls.addView(protectionButton, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        deviceControls.addView(lockButton, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         val memoryControls = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
         }
@@ -155,6 +175,7 @@ class MainActivity : Activity() {
         root.addView(heading)
         root.addView(status)
         root.addView(download)
+        root.addView(deviceControls)
         root.addView(memoryControls)
         root.addView(scroll, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
@@ -165,6 +186,70 @@ class MainActivity : Activity() {
         setContentView(root)
     }
 
+
+    private fun deviceAdminComponent(): ComponentName =
+        ComponentName(this, AuraDeviceAdminReceiver::class.java)
+
+    private fun isDeviceAdminActive(): Boolean {
+        val manager = getSystemService(DEVICE_POLICY_SERVICE) as DevicePolicyManager
+        return manager.isAdminActive(deviceAdminComponent())
+    }
+
+    private fun updateDeviceAdminControls() {
+        val active = isDeviceAdminActive()
+        protectionButton.text = if (active) "Device lock enabled" else "Enable device lock"
+        lockButton.isEnabled = active
+    }
+
+    private fun requestDeviceAdmin() {
+        if (isDeviceAdminActive()) {
+            status.text = "AURA screen-lock permission is already enabled."
+            return
+        }
+        val intent = Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
+            putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, deviceAdminComponent())
+            putExtra(
+                DevicePolicyManager.EXTRA_ADD_EXPLANATION,
+                "AURA requests only the force-lock policy. It does not request remote wipe, password reset, or device monitoring."
+            )
+        }
+        startActivityForResult(intent, REQUEST_DEVICE_ADMIN)
+    }
+
+    private fun confirmDeviceLock() {
+        if (!isDeviceAdminActive()) {
+            updateDeviceAdminControls()
+            status.text = "Enable AURA device-lock permission first."
+            return
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Lock this device?")
+            .setMessage("AURA will ask Android to lock the screen now. You can unlock it normally with your device credentials.")
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Lock now") { _, _ ->
+                val manager = getSystemService(DEVICE_POLICY_SERVICE) as DevicePolicyManager
+                manager.lockNow()
+            }
+            .show()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::protectionButton.isInitialized) updateDeviceAdminControls()
+    }
+
+    @Deprecated("Use Activity Result API")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQUEST_DEVICE_ADMIN) {
+            updateDeviceAdminControls()
+            status.text = if (isDeviceAdminActive()) {
+                "AURA screen-lock permission enabled."
+            } else {
+                "Device-lock permission was not enabled."
+            }
+        }
+    }
 
     private fun showMemorySettings() {
         if (!memory.enabled) {
