@@ -21,18 +21,41 @@
 3. Remote commands must be signed, device-bound, expiring, replay-resistant and auditable.
 4. Sensitive actions require explicit user authorization.
 5. AURA respects Android and iOS security boundaries; it does not promise OS capabilities that apps are not granted.
-6. Every third-party component has a source URL, pinned revision, licence gate and integration status.
+6. Keep upstream source isolated from AURA-owned code; complete distribution and licence review before release without blocking prototype work.
 
 ## Current development
 
-The first dependency-free AURA Core contracts are in `packages/core/`. They validate command envelopes, model device capability observations and enforce a deny-by-default approval policy. Run:
+The repository now contains working implementation layers rather than only architecture placeholders:
+
+- `packages/core/` — command envelopes, capability allowlists and deny-by-default policy.
+- `packages/runtime/` — local llama.cpp HTTP adapter for desktop/server development.
+- `packages/assistant/` — bounded assistant sessions and local inference composition.
+- `packages/guard/` — Ed25519 device-command security and capability enforcement.
+- `packages/recovery-server/` — PostgreSQL device registry, challenge-based enrollment, server-signed commands, acknowledgements, audit events and opt-in location check-ins.
+- `recovery-console/` — browser console for enrolled devices, confirmed lock/location requests, revocation and location clearing.
+- `android/` — native llama.cpp JNI runtime, verified small-model download, on-device voice, encrypted opt-in memory, Android Device Admin lock, encrypted recovery credentials and WorkManager polling.
+
+The Android remote-recovery client currently targets Android 13+ for its Ed25519 provider. Screen locking requires the user to enable Android's lock-only Device Admin policy. Background location is off by default and requires explicit consent plus Android's background-location permission. Remote location refresh and screen lock are signed, expiring commands; devices must be online and Android may delay background work.
+
+### Verification status
+
+- Focused AURA core, runtime and assistant tests were previously exercised locally.
+- Three recovery cryptography tests have been run locally and pass.
+- CI now syntax-checks the recovery service, runs workspace tests and builds the recovery Docker image.
+- A separate GitHub Actions workflow is configured to compile the Android debug APK against the pinned llama.cpp revision and upload it as an artifact.
+- A full repository CI run, native Android APK build and physical-device test have not yet been confirmed.
+
+The recovery API is deployable with Docker Compose or Railway. It is not yet deployed to a live server. iOS native recovery integration is not yet implemented.
+
+Run workspace tests from a local clone:
 
 ```sh
+npm install
 npm test
 ```
 
-The core is not yet a complete remote-command security implementation: cryptographic signature verification, persistent replay protection, secure transport, encrypted storage and native command execution remain to be implemented and tested.
-
+For recovery deployment instructions, see `packages/recovery-server/README.md`. The local secret bootstrap script is `scripts/bootstrap-recovery-secrets.sh`.
+ 
 ## Upstream dependencies
 
 The initial audit has approved three runtime candidates, pinned in `UPSTREAM_MANIFEST.md`:
