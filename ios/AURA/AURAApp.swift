@@ -220,6 +220,7 @@ final class AuraAssistantModel: ObservableObject {
     func send(_ text: String, savedMemory: [AuraMemoryItem] = []) async {
         let prompt = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !prompt.isEmpty, !isBusy else { return }
+        guard prompt.count <= 32_000 else { status = "Message is too long (maximum 32,000 characters)."; return }
         isBusy = true
         messages.append(AuraChatMessage(role: "user", content: prompt))
         if messages.count > 40 { messages.removeFirst(messages.count - 40) }
