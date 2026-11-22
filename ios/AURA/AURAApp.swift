@@ -116,7 +116,12 @@ final class AuraMemoryVault: ObservableObject {
     }
 
     private func load() {
-        guard enabled, FileManager.default.fileExists(atPath: vaultURL.path) else { items = []; return }
+        guard enabled else { items = []; return }
+        guard FileManager.default.fileExists(atPath: vaultURL.path) else {
+            items = []
+            status = "Encrypted memory is enabled. No saved items yet."
+            return
+        }
         do {
             let combined = try Data(contentsOf: vaultURL)
             let box = try AES.GCM.SealedBox(combined: combined)
