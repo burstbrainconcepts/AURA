@@ -9,6 +9,9 @@ let busy = false;
 let memoryUnlocked = false;
 let memoryPassphrase = "";
 let memoryItems = [];
+let recoveryUrl = localStorage.getItem("aura.recovery.url") || "";
+let recoveryToken = "";
+let recoveryDevices = [];
 
 app.innerHTML = `
   <main class="shell">
@@ -229,6 +232,118 @@ async function renderMemoryPanel() {
   });
 }
 
+
+function renderGuardPanel(status = "Connect to the deployed AURA Recovery API.") {
+  panel.innerHTML = `
+    <div class="panel-head"><div><h3>AURA Guard</h3><p class="muted">Manage enrolled devices through your authenticated recovery service.</p></div><span class="tag">${recoveryToken ? "Connected session" : "Not connected"}</span></div>
+    <form id="recovery-connect" class="settings-form">
+      <label for="recovery-url">Recovery API HTTPS URL</label>
+      <input id="recovery-url" spellcheck="false" autocomplete="url" placeholder="https://your-recovery-host" />
+      <label for="recovery-token">Account API token</label>
+      <input id="recovery-token" type="password" autocomplete="off" />
+      <div class="settings-actions"><button type="submit">Connect / refresh</button><button type="button" id="recovery-disconnect" class="secondary">Disconnect</button></div>
+      <p class="hint" id="recovery-status"></p>
+    </form>
+    <div id="recovery-device-list" class="memory-list"></div>`;
+  document.querySelector("#recovery-url").value = recoveryUrl;
+  document.querySelector("#recovery-token").value = recoveryToken;
+  document.querySelector("#recovery-status").textContent = status;
+  document.querySelector("#recovery-connect").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const nextUrl = document.querySelector("#recovery-url").value.trim().replace(/\/$/, "");
+    const nextToken = document.querySelector("#recovery-token").value.trim();
+    try {
+      const parsed = new URL(nextUrl);
+      const localHttp = parsed.protocol === "http:" && ["localhost", "127.0.0.1"].includes(parsed.hostname);
+      if (parsed.protocol !== "https:" && !localHttp) throw new Error("Use an HTTPS recovery URL (HTTP is allowed only for localhost development).");
+      if (parsed.username || parsed.password || parsed.search || parsed.hash) throw new Error("Recovery URL cannot contain credentials, query strings or fragments.");
+      if (nextToken.length < 32) throw new Error("Account token must contain at least 32 characters.");
+      recoveryUrl = nextUrl;
+      recoveryToken = nextToken;
+      localStorage.setItem("aura.recovery.url", recoveryUrl);
+      const result = await invoke("recovery_list_devices", { baseUrl: recoveryUrl, accountToken: recoveryToken });
+      recoveryDevices = Array.isArray(result.devices) ? result.devices : [];
+      renderGuardPanel("Connected · " + recoveryDevices.length + " registered devices. Account token remains in memory only.");
+    } catch (error) {
+      renderGuardPanel("Connection failed: " + String(error));
+    }
+  });
+  document.querySelector("#recovery-disconnect").addEventListener("click", () => {
+    recoveryToken = "";
+    recoveryDevices = [];
+    renderGuardPanel("Disconnected. Account token cleared from application memory.");
+  });
+  const list = document.querySelector("#recovery-device-list");
+  if (!recoveryDevices.length) {
+    const empty = document.createElement("p");
+    empty.className = "empty";
+    empty.textContent = "No devices loaded. Connect to refresh your device list.";
+    list.append(empty);
+  }
+  recoveryDevices.forEach((device) => {
+    const row = document.createElement("div");
+    row.className = "memory-item";
+    const body = document.createElement("div");
+    const name = document.createElement("p");
+    name.textContent = device.label || device.id;
+    const meta = document.createElement("small");
+    meta.textContent = (device.platform || "device").toUpperCase() + " · " + (device.revoked_at ? "Revoked" : "Registered") + (device.last_seen_at ? " · Last seen " + device.last_seen_at : "");
+    body.append(name, meta);
+    row.append(body);
+    const actions = document.createElement("div");
+    actions.className = "recovery-actions";
+    const actionButton = (label, handler, className = "secondary") => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = className;
+      button.textContent = label;
+      button.addEventListener("click", handler);
+      actions.append(button);
+    };
+    if (!device.revoked_at && (device.capabilities || []).includes("device.lock.supported")) {
+      actionButton("Lock", async () => {
+        if (!window.confirm("Queue a signed remote lock command for " + (device.label || device.id) + "? The target device must be online to receive it.")) return;
+        await runRecoveryAction(() => invoke("recovery_queue_command", { baseUrl: recoveryUrl, accountToken: recoveryToken, deviceId: device.id, command: "device.lock", userApproved: true }), "Lock command queued.");
+      }, "danger");
+    }
+    if (!device.revoked_at && (device.capabilities || []).includes("device.location.user_consented")) {
+      actionButton("Refresh location", async () => {
+        if (!window.confirm("Queue a location refresh for " + (device.label || device.id) + "? This uses the consent already granted on that device.")) return;
+        await runRecoveryAction(() => invoke("recovery_queue_command", { baseUrl: recoveryUrl, accountToken: recoveryToken, deviceId: device.id, command: "location.refresh", userApproved: true }), "Location refresh queued.");
+      });
+    }
+    if (device.latitude != null && device.longitude != null) {
+      const location = document.createElement("small");
+      location.textContent = "Last consented location: " + device.latitude + ", " + device.longitude;
+      body.append(location);
+      actionButton("Clear location", async () => {
+        if (!window.confirm("Clear the last stored location for this device?")) return;
+        await runRecoveryAction(() => invoke("recovery_clear_location", { baseUrl: recoveryUrl, accountToken: recoveryToken, deviceId: device.id }), "Stored location cleared.");
+      });
+    }
+    if (!device.revoked_at) {
+      actionButton("Revoke", async () => {
+        if (!window.confirm("Permanently revoke recovery credentials for " + (device.label || device.id) + "?")) return;
+        await runRecoveryAction(() => invoke("recovery_revoke_device", { baseUrl: recoveryUrl, accountToken: recoveryToken, deviceId: device.id }), "Device credentials revoked.");
+      }, "danger");
+    }
+    row.append(actions);
+    list.append(row);
+  });
+}
+async function runRecoveryAction(action, successMessage) {
+  const result = document.querySelector("#recovery-status");
+  if (!recoveryToken) { if (result) result.textContent = "Reconnect before performing recovery actions."; return; }
+  try {
+    await action();
+    const data = await invoke("recovery_list_devices", { baseUrl: recoveryUrl, accountToken: recoveryToken });
+    recoveryDevices = Array.isArray(data.devices) ? data.devices : [];
+    renderGuardPanel(successMessage);
+  } catch (error) {
+    if (result) result.textContent = "Action failed: " + String(error);
+  }
+}
+
 function showPanel(view) {
   if (view === "assistant") {
     showAssistant();
@@ -268,7 +383,7 @@ function showPanel(view) {
     renderMemoryPanel();
     return;
   }
-  panel.innerHTML = '<div class="panel-head"><div><h3>Device protection</h3><p class="muted">Connect AURA Guard to your recovery service.</p></div><span class="tag">Service not connected</span></div><div class="notice">The shared recovery API supports device enrollment, signed command queues, acknowledgements and audit events. Connect the deployed recovery service to manage enrolled devices. Capability availability and approval requirements are discovered per platform and deployment.</div>';
+  renderGuardPanel();
 }
 
 document.querySelectorAll(".nav").forEach((button) => button.addEventListener("click", () => {
