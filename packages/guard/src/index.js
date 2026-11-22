@@ -34,7 +34,12 @@ export class DeviceCommandAuthority {
   revokeDevice(deviceId) { return this.#devices.delete(deviceId); }
 
   issueCommand({deviceId,command,requestedBy,privateKeyPem,ttlMs=5*60*1000,userApproved=false}) {
-    if(!this.#devices.has(deviceId)) throw new Error("Device is not registered.");
+    const device = this.#devices.get(deviceId);
+    if(!device) throw new Error("Device is not registered.");
+    const requiredCapability = REQUIRED_CAPABILITY[command];
+    if (!requiredCapability || !device.capabilities.has(requiredCapability)) {
+      throw new Error("Device does not have the capability required for this command.");
+    }
     if(APPROVAL_REQUIRED.has(command) && userApproved!==true) throw new Error("Explicit user approval is required before issuing this command.");
     const now=this.#clock();
     const envelope=createCommandEnvelope({
