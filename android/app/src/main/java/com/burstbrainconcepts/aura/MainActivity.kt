@@ -285,16 +285,18 @@ class MainActivity : Activity() {
             try {
                 recovery.setLocationOptIn(enabled)
                 recovery.refreshEnrollmentCapabilities()
+                if (!enabled) recovery.clearLastLocation()
                 runOnUiThread {
                     locationButton.text = if (enabled) "Location: on" else "Location: off"
                     locationButton.isEnabled = true
                     status.text = if (enabled) "Location check-ins enabled • background permission granted" else "Location check-ins disabled"
                 }
             } catch (error: Exception) {
+                if (enabled) recovery.setLocationOptIn(false)
                 runOnUiThread {
                     locationButton.text = if (recovery.isLocationOptIn()) "Location: on" else "Location: off"
                     locationButton.isEnabled = true
-                    status.text = "Location setting saved locally, but server capability update failed"
+                    status.text = "Location setting could not be synchronized with the recovery server."
                 }
             }
         }
