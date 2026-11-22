@@ -59,6 +59,26 @@ class EncryptedRecoveryStore(context: Context) {
     }
 
     @Synchronized
+    fun getProcessedCommand(commandId: String): JSONObject? {
+        val commands = read().optJSONObject("processedCommands") ?: return null
+        val value = commands.optJSONObject(commandId) ?: return null
+        return JSONObject(value.toString())
+    }
+
+    @Synchronized
+    fun saveProcessedCommand(commandId: String, nonce: String, result: String, detail: String) {
+        val value = read()
+        val commands = value.optJSONObject("processedCommands") ?: JSONObject()
+        commands.put(commandId, JSONObject().put("nonce", nonce).put("result", result).put("detail", detail.take(1000)))
+        while (commands.length() > MAX_NONCES) {
+            val iterator = commands.keys()
+            if (iterator.hasNext()) commands.remove(iterator.next()) else break
+        }
+        value.put("processedCommands", commands)
+        write(value)
+    }
+
+    @Synchronized
     fun consumeNonce(nonce: String): Boolean {
         val value = read()
         val entries = value.optJSONArray("processedNonces") ?: JSONArray()
