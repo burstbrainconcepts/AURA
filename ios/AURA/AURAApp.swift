@@ -3,6 +3,8 @@ import Foundation
 import Combine
 import CryptoKit
 import Security
+import Speech
+import AVFoundation
 
 
 struct AuraMemoryItem: Codable, Identifiable {
@@ -168,6 +170,7 @@ private struct LocalChatResponse: Decodable {
 final class AuraAssistantModel: ObservableObject {
     @Published var messages: [AuraChatMessage] = []
     @Published var isBusy = false
+    @Published var lastAnswer = ""
     @Published var apiKey = ""
     @Published var engineOnline = false
     @Published var status = "Checking local model…"
@@ -234,6 +237,7 @@ final class AuraAssistantModel: ObservableObject {
                 throw NSError(domain: "AURA", code: 4, userInfo: [NSLocalizedDescriptionKey: "The local model returned no answer."])
             }
             messages.append(AuraChatMessage(role: "assistant", content: answer))
+            lastAnswer = answer
             engineOnline = true
             status = "Local model connected"
         } catch {
@@ -247,6 +251,109 @@ final class AuraAssistantModel: ObservableObject {
 }
 
 @main
+
+@MainActor
+final class AuraSpeechController: ObservableObject {
+    @Published var isRecording = false
+    @Published var transcript = ""
+    @Published var status = "Offline voice input is ready when the device supports it."
+
+    private let audioEngine = AVAudioEngine()
+    private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
+    private var recognitionTask: SFSpeechRecognitionTask?
+
+    func start() {
+        guard !isRecording else { return }
+        let authorization = SFSpeechRecognizer.authorizationStatus()
+        if authorization == .notDetermined {
+            SFSpeechRecognizer.requestAuthorization { result in
+                Task { @MainActor in self.requestMicrophonePermission(after: result) }
+            }
+        } else {
+            requestMicrophonePermission(after: authorization)
+        }
+    }
+
+    private func requestMicrophonePermission(after authorization: SFSpeechRecognizerAuthorizationStatus) {
+        guard authorization == .authorized else {
+            status = "Speech recognition permission is not granted."
+            return
+        }
+        AVAudioSession.sharedInstance().requestRecordPermission { granted in
+            Task { @MainActor in
+                if granted { self.beginCapture() }
+                else { self.status = "Microphone permission is not granted." }
+            }
+        }
+    }
+
+    private func beginCapture() {
+        guard let recognizer = SFSpeechRecognizer(locale: Locale.current), recognizer.isAvailable else {
+            status = "Speech recognition is currently unavailable for this language."
+            return
+        }
+        guard recognizer.supportsOnDeviceRecognition else {
+            status = "Offline speech recognition is not available for this language on this device right now."
+            return
+        }
+        do {
+            transcript = ""
+            let session = AVAudioSession.sharedInstance()
+            try session.setCategory(.record, mode: .measurement, options: [.duckOthers])
+            try session.setActive(true)
+            let request = SFSpeechAudioBufferRecognitionRequest()
+            request.shouldReportPartialResults = true
+            request.requiresOnDeviceRecognition = true
+            request.taskHint = .dictation
+            recognitionRequest = request
+
+            let input = audioEngine.inputNode
+            let format = input.outputFormat(forBus: 0)
+            input.installTap(onBus: 0, bufferSize: 1024, format: format) { buffer, _ in
+                request.append(buffer)
+            }
+            audioEngine.prepare()
+            try audioEngine.start()
+            isRecording = true
+            status = "Listening · on-device recognition"
+            recognitionTask = recognizer.recognitionTask(with: request) { result, error in
+                Task { @MainActor in
+                    if let result { self.transcript = result.bestTranscription.formattedString }
+                    if error != nil || result?.isFinal == true {
+                        self.stop()
+                        self.status = error == nil ? "Transcription ready." : "Voice input stopped."
+                    }
+                }
+            }
+        } catch {
+            stop()
+            status = "Could not start voice input: " + error.localizedDescription
+        }
+    }
+
+    func stop() {
+        if audioEngine.isRunning {
+            audioEngine.stop()
+            audioEngine.inputNode.removeTap(onBus: 0)
+        }
+        recognitionRequest?.endAudio()
+        recognitionRequest = nil
+        isRecording = false
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    }
+}
+
+@MainActor
+final class AuraSpeechOutput: ObservableObject {
+    private let synthesizer = AVSpeechSynthesizer()
+    func speak(_ text: String) {
+        guard !text.isEmpty else { return }
+        let utterance = AVSpeechUtterance(string: text)
+        utterance.rate = AVSpeechUtteranceDefaultSpeechRate
+        synthesizer.speak(utterance)
+    }
+}
+
 struct AURAApp: App {
     var body: some Scene {
         WindowGroup {
@@ -394,6 +501,9 @@ struct ContentView: View {
     @StateObject private var assistant = AuraAssistantModel()
     @StateObject private var memoryVault = AuraMemoryVault()
     @StateObject private var recovery = AuraRecoveryModel()
+    @StateObject private var speech = AuraSpeechController()
+    @StateObject private var speechOutput = AuraSpeechOutput()
+    @AppStorage("aura.voice.output.enabled") private var voiceOutputEnabled = false
     @State private var pendingDevice: AuraRecoveryDevice?
     @State private var pendingCommand = ""
     @State private var pendingRevokeID: String?
@@ -431,6 +541,12 @@ struct ContentView: View {
             }
         }
         .task { await assistant.checkHealth() }
+        .onChange(of: speech.transcript) { value in
+            if !value.isEmpty { message = value }
+        }
+        .onChange(of: assistant.lastAnswer) { value in
+            if voiceOutputEnabled && !value.isEmpty { speechOutput.speak(value) }
+        }
         .confirmationDialog("Confirm remote command", isPresented: Binding(
             get: { pendingDevice != nil },
             set: { if !$0 { pendingDevice = nil; pendingCommand = "" } }
@@ -481,6 +597,7 @@ struct ContentView: View {
             }.padding(.top, 10)
 
             Text(assistant.status).font(.caption2).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
+            Text(speech.status).font(.caption2).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
 
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 12) {
@@ -501,6 +618,11 @@ struct ContentView: View {
 
             HStack(spacing: 10) {
                 TextField("Message AURA...", text: $message, axis: .vertical).lineLimit(1...4).padding(13).background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 13))
+                Button {
+                    if speech.isRecording { speech.stop() } else { speech.start() }
+                } label: {
+                    Image(systemName: speech.isRecording ? "stop.fill" : "mic.fill").font(.headline).foregroundStyle(.white).frame(width: 42, height: 45).background(speech.isRecording ? Color.orange : Color.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 13))
+                }.accessibilityLabel(speech.isRecording ? "Stop voice input" : "Start offline voice input")
                 Button {
                     let value = message
                     message = ""
@@ -617,6 +739,10 @@ struct ContentView: View {
                     .autocorrectionDisabled()
                 Button("Test local connection") { Task { await assistant.checkHealth() } }
                 Text(assistant.status).font(.caption).foregroundStyle(.secondary)
+            }
+            Section("Voice") {
+                Toggle("Speak AURA replies", isOn: $voiceOutputEnabled)
+                Text("Voice input requests on-device speech recognition only. If the current language or device does not support offline recognition, AURA reports that status instead of silently switching to an online service.")
             }
             Section("Privacy") {
                 Text("Chat requests are sent to the local inference URL configured above. For a computer-hosted model, use its reachable local-network address and configure the inference server to accept connections from your phone. If you enable server API-key authentication, enter the key above; it is kept in memory only and is not written to app preferences.")
