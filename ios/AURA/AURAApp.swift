@@ -5,7 +5,7 @@ import CryptoKit
 import Security
 
 
-private struct AuraMemoryItem: Codable, Identifiable {
+struct AuraMemoryItem: Codable, Identifiable {
     let id: UUID
     let text: String
     let createdAt: Date
@@ -133,7 +133,7 @@ final class AuraMemoryVault: ObservableObject {
     }
 }
 
-private struct AuraChatMessage: Codable, Identifiable {
+struct AuraChatMessage: Codable, Identifiable {
     var role: String
     var content: String
     var id = UUID()
