@@ -37,13 +37,14 @@ Store the base64 output as `AURA_COMMAND_PRIVATE_KEY_B64` in the server secret m
 
 ## Run locally with Docker
 
-Copy the example environment file and fill in the private values:
+Generate local secrets without overwriting an existing `.env`:
 
 ```bash
-cp .env.example .env
-# Generate a server signing key and account token as described above.
+bash scripts/bootstrap-recovery-secrets.sh
 docker compose --env-file .env -f docker-compose.recovery.yml up -d --build
 ```
+
+The script creates a private Ed25519 signing key under the Git-ignored `secrets/` directory and a Git-ignored `.env` containing random account and database credentials. For hosted Railway deployment, generate the same values locally and add them as service secrets instead of committing them.
 
 The Compose stack starts PostgreSQL, applies the migrations, and starts the API. For Railway, add a PostgreSQL service and set `DATABASE_URL`, `AURA_COMMAND_PRIVATE_KEY_B64`, `AURA_BOOTSTRAP_ACCOUNT_ID`, and `AURA_BOOTSTRAP_ACCOUNT_TOKEN` as service variables. The root `Dockerfile` and `railway.json` configure the deployment and health check.
 
