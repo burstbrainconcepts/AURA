@@ -257,7 +257,7 @@ async function route(req, res) {
   }
 
 
-  const clearLocationMatch = path.match(/^\\/v1\\/devices\\/([a-zA-Z0-9._:-]{8,128})\\/location\\/clear$/);
+  const clearLocationMatch = path.match(/^\/v1\/devices\/([a-zA-Z0-9._:-]{8,128})\/location\/clear$/);
   if (req.method === "POST" && clearLocationMatch) {
     const account = await accountFor(req);
     if (!account) return send(res, 401, { error: "account_auth_required" });
