@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { createPublicKey, generateKeyPairSync, sign, verify } from "node:crypto";
 import {
   canonicalCommand,
+  createEnrollmentMessage,
   createDeviceToken,
   exportCommandPublicKey,
   loadCommandSigner,
@@ -18,13 +19,26 @@ test("device tokens are high entropy and stored as one-way hashes", () => {
   assert.equal(sha256(token).length, 64);
 });
 
-test("enrollment proof verifies against the registered device key", () => {
+test("enrollment proof binds device identity and the exact requested capabilities", () => {
   const pair = generateKeyPairSync("ed25519");
   const publicKeyPem = pair.publicKey.export({ type: "spki", format: "pem" }).toString();
-  const message = "AURA-ENROLL:v1:challenge-id:device-id:expires:nonce";
+  const claims = {
+    challengeId: "challenge-123456",
+    deviceId: "device-123456",
+    publicKeySha256: sha256(publicKeyPem),
+    capabilities: ["device.recovery.queue"],
+    platform: "android",
+    label: "AURA test device",
+    expiresAt: "2026-11-22T12:05:00.000Z",
+    challenge: "nonce-from-server"
+  };
+  const message = createEnrollmentMessage(claims);
   const signature = sign(null, Buffer.from(message), pair.privateKey).toString("base64");
   assert.equal(verifyEnrollmentProof({ publicKeyPem, message, signature }), true);
-  assert.equal(verifyEnrollmentProof({ publicKeyPem, message: message + "x", signature }), false);
+
+  const changedClaims = { ...claims, capabilities: ["device.recovery.queue", "device.location.user_consented"] };
+  const changedMessage = createEnrollmentMessage(changedClaims);
+  assert.equal(verifyEnrollmentProof({ publicKeyPem, message: changedMessage, signature }), false);
 });
 
 test("server signs canonical command envelopes with its own Ed25519 key", () => {
