@@ -235,7 +235,8 @@ async function route(req, res) {
     const account = await accountFor(req);
     if (!account) return send(res, 401, { error: "account_auth_required" });
     const result = await pool.query(
-      `SELECT id, platform, label, capabilities, created_at, last_seen_at, revoked_at
+      `SELECT id, platform, label, capabilities, created_at, last_seen_at, revoked_at,
+       latitude, longitude, location_accuracy_m, location_updated_at
        FROM aura_devices WHERE account_id = $1 ORDER BY created_at DESC`,
       [account.id]
     );
@@ -253,6 +254,55 @@ async function route(req, res) {
     if (!result.rowCount) return send(res, 404, { error: "device_not_found_or_already_revoked" });
     await audit(account.id, revokeMatch[1], "device.revoked");
     return send(res, 200, { revoked: true, deviceId: revokeMatch[1] });
+  }
+
+
+  const clearLocationMatch = path.match(/^\\/v1\\/devices\\/([a-zA-Z0-9._:-]{8,128})\\/location\\/clear$/);
+  if (req.method === "POST" && clearLocationMatch) {
+    const account = await accountFor(req);
+    if (!account) return send(res, 401, { error: "account_auth_required" });
+    const result = await pool.query(
+      `UPDATE aura_devices SET latitude = NULL, longitude = NULL, location_accuracy_m = NULL,
+       location_updated_at = NULL WHERE id = $1 AND account_id = $2 RETURNING id`,
+      [clearLocationMatch[1], account.id]
+    );
+    if (!result.rowCount) return send(res, 404, { error: "device_not_found" });
+    await audit(account.id, clearLocationMatch[1], "device.location.cleared");
+    return send(res, 200, { cleared: true, deviceId: clearLocationMatch[1] });
+  }
+
+  if (req.method === "POST" && path === "/v1/device/checkin") {
+    const device = await deviceFor(req);
+    if (!device) return send(res, 401, { error: "device_auth_required" });
+    const body = await readJson(req);
+    if (body.location == null) {
+      await pool.query("UPDATE aura_devices SET last_seen_at = NOW() WHERE id = $1", [device.id]);
+      return send(res, 200, { checkedIn: true, locationUpdated: false });
+    }
+    if (!Array.isArray(device.capabilities) || !device.capabilities.includes("device.location.user_consented")) {
+      return send(res, 403, { error: "location_consent_capability_missing" });
+    }
+    const location = body.location;
+    const latitude = Number(location.latitude);
+    const longitude = Number(location.longitude);
+    const accuracy = Number(location.accuracyM);
+    const capturedAt = Date.parse(location.capturedAt);
+    const now = Date.now();
+    if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 ||
+        !Number.isFinite(longitude) || longitude < -180 || longitude > 180 ||
+        !Number.isFinite(accuracy) || accuracy < 0 || accuracy > 100000 ||
+        !Number.isFinite(capturedAt) || capturedAt > now + 60_000 || capturedAt < now - 15 * 60_000) {
+      return send(res, 400, { error: "invalid_or_stale_location" });
+    }
+    await pool.query(
+      `UPDATE aura_devices SET last_seen_at = NOW(), latitude = $1, longitude = $2,
+       location_accuracy_m = $3, location_updated_at = $4 WHERE id = $5`,
+      [latitude, longitude, accuracy, new Date(capturedAt), device.id]
+    );
+    await audit(device.account_id, device.id, "device.location.updated", {
+      accuracyM: Math.round(accuracy), capturedAt: new Date(capturedAt).toISOString()
+    });
+    return send(res, 200, { checkedIn: true, locationUpdated: true });
   }
 
   if (req.method === "POST" && path === "/v1/commands") {
