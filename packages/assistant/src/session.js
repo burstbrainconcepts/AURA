@@ -32,11 +32,11 @@ export class AssistantSession {
 
     this.pending = true;
     const userMessage = { role: "user", content: text.trim() };
+    const recentMessages = [...this.messages, userMessage].slice(-this.maxHistoryMessages);
     const context = [
       { role: "system", content: this.systemPrompt },
-      ...this.messages,
-      userMessage
-    ].slice(-(this.maxHistoryMessages + 1));
+      ...recentMessages
+    ];
 
     try {
       const result = await this.inference.chat({
