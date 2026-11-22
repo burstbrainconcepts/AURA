@@ -21,4 +21,6 @@ jobs:
         with:
           node-version: 22
       - run: npm install --ignore-scripts
+      - name: Validate recovery server JavaScript syntax
+        run: node --check packages/recovery-server/src/server.js && node --check packages/recovery-server/src/security.js && node --check packages/recovery-server/src/migrate.js
       - run: npm test
