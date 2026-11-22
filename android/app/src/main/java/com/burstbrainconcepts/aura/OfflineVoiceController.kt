@@ -2,13 +2,10 @@ package com.burstbrainconcepts.aura
 
 import android.Manifest
 import android.app.Activity
-import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -28,7 +25,6 @@ class OfflineVoiceController(
     private var recognizer: SpeechRecognizer? = null
     private var tts: TextToSpeech? = null
     private var offlineTtsReady = false
-    private val main = Handler(Looper.getMainLooper())
 
     fun initialize() {
         tts = TextToSpeech(activity.applicationContext, this)
@@ -84,12 +80,19 @@ class OfflineVoiceController(
             return
         }
         val engine = tts ?: return
+        val preferredLanguage = Locale.getDefault().language
         val localVoice: Voice? = engine.voices
-            ?.filter { !it.isNetworkConnectionRequired && it.locale.language == "en" }
-            ?.sortedBy { if (it.locale.country == "NG") 0 else 1 }
+            ?.filter { !it.isNetworkConnectionRequired }
+            ?.sortedBy {
+                when {
+                    it.locale.language == preferredLanguage -> 0
+                    it.locale.language == "en" -> 1
+                    else -> 2
+                }
+            }
             ?.firstOrNull()
         if (localVoice == null) {
-            onStatus("No installed offline English voice found. You can still use text chat.")
+            onStatus("No installed offline voice found. You can still use text chat.")
             return
         }
         engine.voice = localVoice
