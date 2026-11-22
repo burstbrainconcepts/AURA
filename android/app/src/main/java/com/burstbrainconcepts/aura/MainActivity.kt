@@ -181,7 +181,7 @@ class MainActivity : Activity() {
                 .show()
             return
         }
-        val saved = memory.list()
+        val saved = memory.list().takeLast(10)
         val summary = if (saved.isEmpty()) "No saved memories yet." else
             saved.mapIndexed { index, item -> "${index + 1}. $item" }.joinToString("\n\n")
         AlertDialog.Builder(this)
@@ -263,6 +263,7 @@ class MainActivity : Activity() {
                 val state = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
                 if (state != DownloadManager.STATUS_SUCCESSFUL) {
                     val reason = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_REASON))
+                    modelFile().delete()
                     runOnUiThread {
                         status.text = "Download failed (code $reason). Try again."
                         download.isEnabled = true
@@ -277,6 +278,7 @@ class MainActivity : Activity() {
             try {
                 val file = modelFile()
                 if (!file.exists() || file.length() < 300_000_000L) {
+                    file.delete()
                     throw IllegalStateException("The downloaded model is incomplete.")
                 }
                 val digest = MessageDigest.getInstance("SHA-256")
