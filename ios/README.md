@@ -5,6 +5,8 @@ Native SwiftUI application target for iPhone and iPad.
 ## Implemented in this target
 
 - Local assistant chat through the OpenAI-compatible llama.cpp HTTP API.
+- Push-to-talk speech input using on-device speech recognition when the current locale and device support it; AURA does not silently fall back to online transcription.
+- Optional local speech output using the device's installed text-to-speech voice.
 - Configurable local inference URL and optional API key. The key remains in app memory and is not saved in preferences.
 - Opt-in encrypted memory using AES-GCM. The encryption key is stored in the iOS Keychain with device-only accessibility; encrypted memory data is stored with complete file protection. Memory is manually saved, reviewable, deletable and can be disabled.
 - AURA Guard controller for listing registered devices, queuing explicitly confirmed lock and location-refresh commands, clearing a stored location and revoking device credentials. The account API token is stored in the Keychain after a successful connection.
