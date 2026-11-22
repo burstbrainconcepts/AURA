@@ -1,0 +1,42 @@
+name: iOS simulator build
+
+on:
+  push:
+    branches: [main]
+    paths: ["ios/**", ".github/workflows/ios-build.yml"]
+  pull_request:
+    paths: ["ios/**", ".github/workflows/ios-build.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ios-simulator:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Select Xcode
+        run: xcodebuild -version
+      - name: Build iOS Simulator app
+        run: |
+          xcodebuild \
+            -project ios/AURA.xcodeproj \
+            -scheme AURA \
+            -sdk iphonesimulator \
+            -configuration Debug \
+            -derivedDataPath build/ios \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+      - name: Package simulator application
+        run: |
+          APP_PATH="build/ios/Build/Products/Debug-iphonesimulator/AURA.app"
+          test -d "$APP_PATH"
+          ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" build/AURA-ios-simulator.zip
+      - name: Upload simulator build
+        uses: actions/upload-artifact@v4
+        with:
+          name: aura-ios-simulator
+          path: build/AURA-ios-simulator.zip
+          if-no-files-found: error
+          retention-days: 14
