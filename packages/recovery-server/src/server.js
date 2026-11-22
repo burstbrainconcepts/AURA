@@ -1,4 +1,7 @@
 import { createServer } from "node:http";
+import { readFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { randomUUID, randomBytes } from "node:crypto";
 import { Pool } from "pg";
 import { createCommandEnvelope, CAPABILITIES, isCommandAllowlisted } from "@aura/core";
@@ -12,6 +15,13 @@ import {
 } from "./security.js";
 
 const PORT = Number(process.env.PORT || 8787);
+const CONSOLE_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "recovery-console");
+const CONSOLE_FILES = Object.freeze({
+  "/console": ["index.html", "text/html; charset=utf-8"],
+  "/console/": ["index.html", "text/html; charset=utf-8"],
+  "/console/app.js": ["app.js", "text/javascript; charset=utf-8"],
+  "/console/styles.css": ["styles.css", "text/css; charset=utf-8"]
+});
 const DATABASE_URL = process.env.DATABASE_URL;
 const ACCOUNT_ID = process.env.AURA_BOOTSTRAP_ACCOUNT_ID;
 const ACCOUNT_TOKEN = process.env.AURA_BOOTSTRAP_ACCOUNT_TOKEN;
@@ -98,6 +108,20 @@ async function audit(accountId, deviceId, eventType, metadata = {}) {
 async function route(req, res) {
   const url = new URL(req.url, "http://aura.internal");
   const path = url.pathname;
+
+  if (req.method === "GET" && CONSOLE_FILES[path]) {
+    const [fileName, contentType] = CONSOLE_FILES[path];
+    const content = await readFile(join(CONSOLE_DIR, fileName));
+    res.writeHead(200, {
+      "content-type": contentType,
+      "cache-control": "no-store",
+      "x-content-type-options": "nosniff",
+      "referrer-policy": "no-referrer",
+      "content-security-policy": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
+    });
+    res.end(content);
+    return;
+  }
 
   if (req.method === "GET" && path === "/health") {
     await pool.query("SELECT 1");
