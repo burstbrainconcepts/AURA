@@ -130,7 +130,7 @@ async function lockDevice(device) {
   try {
     const result = await api("/v1/commands", {
       method: "POST",
-      body: JSON.stringify({ deviceId: device.id, command: "device.lock", userApproved: true, ttlMs: 300000 })
+      body: JSON.stringify({ deviceId: device.id, command: "device.lock", userApproved: true, ttlMs: 900000 })
     });
     setStatus(`Lock command queued. It expires at ${formatDate(result.expiresAt)}.`);
   } catch (error) {
@@ -145,7 +145,7 @@ async function refreshLocation(device) {
   try {
     const result = await api("/v1/commands", {
       method: "POST",
-      body: JSON.stringify({ deviceId: device.id, command: "location.refresh", userApproved: true, ttlMs: 300000 })
+      body: JSON.stringify({ deviceId: device.id, command: "location.refresh", userApproved: true, ttlMs: 900000 })
     });
     setStatus(`Location request queued. It expires at ${formatDate(result.expiresAt)}. Refresh the device list after it checks in.`);
   } catch (error) {
