@@ -131,6 +131,7 @@ class RemoteRecoveryClient(context: Context) {
         val response = request(base, "GET", "/v1/device/commands", token, null)
         val commands = response.optJSONArray("commands") ?: JSONArray()
         var handled = 0
+        var locationReported = false
         for (index in 0 until commands.length()) {
             val item = commands.optJSONObject(index) ?: continue
             val signed = item.optJSONObject("signedCommand") ?: continue
@@ -166,6 +167,23 @@ class RemoteRecoveryClient(context: Context) {
                             detail = "Android screen lock requested by the account owner."
                         }
                     }
+                    "location.refresh" -> {
+                        if (!store.isLocationOptIn() || !hasBackgroundLocationPermission()) {
+                            result = "rejected"
+                            detail = "Location sharing is not enabled with background permission."
+                        } else {
+                            val location = RecoveryLocationProvider(app).getFreshLocation()
+                            if (location == null) {
+                                result = "failed"
+                                detail = "No fresh location fix was available."
+                            } else {
+                                request(base, "POST", "/v1/device/checkin", token, JSONObject().put("location", location))
+                                locationReported = true
+                                result = "executed"
+                                detail = "Fresh consented location check-in sent."
+                            }
+                        }
+                    }
                     else -> {
                         result = "rejected"
                         detail = "This command is not implemented on this Android client."
@@ -178,11 +196,13 @@ class RemoteRecoveryClient(context: Context) {
             acknowledge(base, token, commandId, result, detail)
             handled++
         }
-        val checkin = JSONObject()
-        if (store.isLocationOptIn() && hasBackgroundLocationPermission()) {
-            RecoveryLocationProvider(app).getFreshLocation()?.let { checkin.put("location", it) }
+        if (!locationReported) {
+            val checkin = JSONObject()
+            if (store.isLocationOptIn() && hasBackgroundLocationPermission()) {
+                RecoveryLocationProvider(app).getFreshLocation()?.let { checkin.put("location", it) }
+            }
+            request(base, "POST", "/v1/device/checkin", token, checkin)
         }
-        request(base, "POST", "/v1/device/checkin", token, checkin)
         return handled
     }
 
