@@ -501,6 +501,7 @@ final class AuraRecoveryModel: ObservableObject {
 }
 
 struct ContentView: View {
+    @Environment(\.scenePhase) private var scenePhase
     @StateObject private var assistant = AuraAssistantModel()
     @StateObject private var memoryVault = AuraMemoryVault()
     @StateObject private var recovery = AuraRecoveryModel()
@@ -544,6 +545,12 @@ struct ContentView: View {
             }
         }
         .task { await assistant.checkHealth() }
+        .onChange(of: selectedTab) { value in
+            if value != 0 && speech.isRecording { speech.stop() }
+        }
+        .onChange(of: scenePhase) { phase in
+            if phase != .active && speech.isRecording { speech.stop() }
+        }
         .onChange(of: speech.transcript) { value in
             if !value.isEmpty { message = value }
         }
