@@ -138,6 +138,10 @@ class RemoteRecoveryClient(context: Context) {
             val envelope = signed.optJSONObject("envelope") ?: continue
             val nonce = envelope.optString("nonce")
             val commandId = envelope.optString("commandId")
+            if (!commandId.matches(Regex("^[0-9a-fA-F-]{36}$"))) {
+                handled++
+                continue
+            }
             var result = "rejected"
             var detail = "Invalid command signature or envelope."
             try {
@@ -147,7 +151,12 @@ class RemoteRecoveryClient(context: Context) {
                     continue
                 }
                 if (!store.consumeNonce(nonce)) {
-                    acknowledge(base, token, commandId, "rejected", "Command nonce was already consumed.")
+                    val previous = store.getProcessedCommand(commandId)
+                    if (previous != null && previous.optString("nonce") == nonce) {
+                        acknowledge(base, token, commandId, previous.optString("result", "rejected"), previous.optString("detail"))
+                    } else {
+                        acknowledge(base, token, commandId, "rejected", "Command nonce was already consumed.")
+                    }
                     handled++
                     continue
                 }
@@ -193,6 +202,7 @@ class RemoteRecoveryClient(context: Context) {
                 result = "failed"
                 detail = (error.message ?: "Command processing failed").take(1000)
             }
+            store.saveProcessedCommand(commandId, nonce, result, detail)
             acknowledge(base, token, commandId, result, detail)
             handled++
         }
