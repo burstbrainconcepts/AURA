@@ -288,6 +288,8 @@ final class AuraSpeechController: ObservableObject {
     }
 
     private func beginCapture() {
+        recognitionTask?.cancel()
+        recognitionTask = nil
         guard let recognizer = SFSpeechRecognizer(locale: Locale.current), recognizer.isAvailable else {
             status = "Speech recognition is currently unavailable for this language."
             return
@@ -321,6 +323,7 @@ final class AuraSpeechController: ObservableObject {
                     if let result { self.transcript = result.bestTranscription.formattedString }
                     if error != nil || result?.isFinal == true {
                         self.stop()
+                        self.recognitionTask = nil
                         self.status = error == nil ? "Transcription ready." : "Voice input stopped."
                     }
                 }
