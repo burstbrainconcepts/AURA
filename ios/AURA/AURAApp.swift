@@ -1,5 +1,6 @@
 import SwiftUI
 import Foundation
+import Combine
 
 private struct AuraChatMessage: Codable, Identifiable {
     var role: String
@@ -54,7 +55,7 @@ final class AuraAssistantModel: ObservableObject {
             let url = try makeURL("/health")
             var request = URLRequest(url: url)
             request.httpMethod = "GET"
-            if !apiKey.isEmpty { request.setValue("Bearer \\(apiKey)", forHTTPHeaderField: "Authorization") }
+            if !apiKey.isEmpty { request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization") }
             request.timeoutInterval = 5
             let (_, response) = try await URLSession.shared.data(for: request)
             guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
@@ -80,7 +81,7 @@ final class AuraAssistantModel: ObservableObject {
             request.httpMethod = "POST"
             request.timeoutInterval = 120
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            if !apiKey.isEmpty { request.setValue("Bearer \\(apiKey)", forHTTPHeaderField: "Authorization") }
+            if !apiKey.isEmpty { request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization") }
             let body = LocalChatRequest(model: "local-model", messages: messages, temperature: 0.7, max_tokens: 512, stream: false)
             request.httpBody = try JSONEncoder().encode(body)
             let (data, response) = try await URLSession.shared.data(for: request)
