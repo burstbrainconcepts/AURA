@@ -469,6 +469,12 @@ class MainActivity : Activity() {
             } else {
                 "Device-lock permission was not enabled."
             }
+            if (isDeviceAdminActive() && recovery.isEnrolled()) {
+                executor.execute {
+                    try { recovery.refreshEnrollmentCapabilities() }
+                    catch (_: Exception) { runOnUiThread { status.text = "Lock permission enabled locally. Reconnect recovery to update server capabilities." } }
+                }
+            }
         }
     }
 
