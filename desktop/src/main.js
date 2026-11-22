@@ -81,6 +81,7 @@ async function sendMessage(value) {
   document.querySelector("#send").disabled = true;
   appendMessage("user", value);
   history.push({ role: "user", content: value });
+  if (history.length > 40) history = history.slice(-40);
   const pending = document.createElement("p");
   pending.className = "empty";
   pending.textContent = "AURA is thinking locally…";
@@ -91,6 +92,7 @@ async function sendMessage(value) {
     const answer = await invoke("local_chat", { baseUrl: endpoint, messages: contextMessages });
     pending.remove();
     history.push({ role: "assistant", content: answer });
+    if (history.length > 40) history = history.slice(-40);
     appendMessage("assistant", answer);
     speakReply(answer);
     setStatus(true);
