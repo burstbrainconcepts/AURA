@@ -1,7 +1,13 @@
 import { createPrivateKey, createPublicKey, sign, verify, randomUUID, randomBytes } from "node:crypto";
-import { createCommandEnvelope } from "@aura/core";
+import { createCommandEnvelope, CAPABILITIES } from "@aura/core";
 
 const APPROVAL_REQUIRED = new Set(["device.lock", "location.refresh"]);
+const REQUIRED_CAPABILITY = Object.freeze({
+  "session.revoke": "device.session.revoke",
+  "device.lock": "device.lock.supported",
+  "location.refresh": "device.location.user_consented",
+  "recovery.checkin": "device.recovery.queue"
+});
 const canonical = value => JSON.stringify({
   version:value.version, commandId:value.commandId, deviceId:value.deviceId,
   command:value.command, issuedAt:value.issuedAt, expiresAt:value.expiresAt,
@@ -16,6 +22,9 @@ export class DeviceCommandAuthority {
 
   registerDevice({deviceId,publicKeyPem,capabilities=[]}) {
     if(typeof deviceId!=="string" || deviceId.length<8) throw new TypeError("Invalid deviceId.");
+    if (!Array.isArray(capabilities) || capabilities.some(value => !CAPABILITIES.includes(value))) {
+      throw new TypeError("Device capabilities must come from the AURA capability allowlist.");
+    }
     const publicKey=createPublicKey(publicKeyPem);
     if(publicKey.asymmetricKeyType!=="ed25519") throw new TypeError("Device key must be Ed25519.");
     this.#devices.set(deviceId,{publicKey,capabilities:new Set(capabilities)});
@@ -49,6 +58,10 @@ export class DeviceCommandAuthority {
     catch(error) { return {valid:false,reason:"invalid_envelope",detail:error.message}; }
     const ok=verify(null,Buffer.from(canonical(normalized)),device.publicKey,Buffer.from(signedCommand.signature,"base64"));
     if(!ok) return {valid:false,reason:"signature_invalid"};
+    const requiredCapability = REQUIRED_CAPABILITY[normalized.command];
+    if (!requiredCapability || !device.capabilities.has(requiredCapability)) {
+      return {valid:false,reason:"capability_not_granted"};
+    }
     const now=this.#clock();
     for(const [nonce,expiry] of this.#usedNonces) if(expiry<=now) this.#usedNonces.delete(nonce);
     const replayKey=normalized.deviceId+":"+normalized.nonce;
