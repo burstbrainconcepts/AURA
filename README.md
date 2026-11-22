@@ -8,8 +8,16 @@
 ## Repository structure
 
 - `packages/core/` — AURA-owned shared command and capability contracts.
+- `packages/runtime/` — local inference runtime adapters.
+- `packages/assistant/` — assistant orchestration and sessions.
+- `packages/memory/` — opt-in memory contracts and storage.
+- `packages/guard/` — signed device command security.
+- `packages/recovery-server/` — device enrollment, command queue, acknowledgements and audit API.
+- `recovery-console/` — browser-based device management console.
+- `android/` — native Android application and llama.cpp JNI integration.
+- `desktop/` — Tauri desktop application for Windows, macOS and Linux.
+- `ios/` — native SwiftUI application project for iPhone and iPad.
 - `upstream/engines/` — approved third-party inference and voice engines, registered as pinned Git submodules.
-- `aurora/` — planned product applications and feature modules.
 - `integrations/` — platform adapters around approved upstream components.
 - `audits/` — technical, licence and security reviews.
 - `docs/` — architecture and security decisions.
@@ -20,32 +28,28 @@
 2. Models, maps and voice assets are downloaded separately; never commit large model weights or private datasets.
 3. Remote commands must be signed, device-bound, expiring, replay-resistant and auditable.
 4. Sensitive actions require explicit user authorization.
-5. AURA respects Android and iOS security boundaries; it does not promise OS capabilities that apps are not granted.
-6. Keep upstream source isolated from AURA-owned code; complete distribution and licence review before release without blocking prototype work.
+5. Platform capabilities are discovered through native adapters and verified against the current OS, device, account, entitlements, agreements and deployment context. Do not hard-code today's restrictions as permanent product limits.
+6. Where an integration requires approval, entitlement, managed deployment or a partner agreement, track and pursue that path. Report capability status honestly for each deployment.
+7. Keep upstream source isolated from AURA-owned code; complete distribution and licence review before release without blocking prototype work.
 
 ## Current development
-
-The repository now contains working implementation layers rather than only architecture placeholders:
 
 - `packages/core/` — command envelopes, capability allowlists and deny-by-default policy.
 - `packages/runtime/` — local llama.cpp HTTP adapter for desktop/server development.
 - `packages/assistant/` — bounded assistant sessions and local inference composition.
+- `packages/memory/` — opt-in encrypted memory store.
 - `packages/guard/` — Ed25519 device-command security and capability enforcement.
 - `packages/recovery-server/` — PostgreSQL device registry, challenge-based enrollment, server-signed commands, acknowledgements, audit events and opt-in location check-ins.
-- `recovery-console/` — browser console for enrolled devices, confirmed lock/location requests, revocation and location clearing.
-- `android/` — native llama.cpp JNI runtime, verified small-model download, on-device voice, encrypted opt-in memory, Android Device Admin lock, encrypted recovery credentials and WorkManager polling.
+- `recovery-console/` — browser console for enrolled devices and user-confirmed recovery actions.
+- `android/` — native llama.cpp JNI runtime, verified small-model download, on-device voice, encrypted opt-in memory and recovery polling.
+- `desktop/` — Tauri desktop shell with Assistant, Memory, Device Guard and Settings views; native bundles are configured for Windows, macOS and Linux.
+- `ios/` — SwiftUI app shell with Assistant, Memory, Guard and Settings views, plus an Xcode project and simulator build workflow.
 
-The Android remote-recovery client currently targets Android 13+ for its Ed25519 provider. Screen locking requires the user to enable Android's lock-only Device Admin policy. Background location is off by default and requires explicit consent plus Android's background-location permission. Remote location refresh and screen lock are signed, expiring commands; devices must be online and Android may delay background work.
+## Verification status
 
-### Verification status
+The desktop and iOS targets have been scaffolded and cloud workflows added. Their first CI builds must pass before either target is considered build-verified. The iOS workflow produces an unsigned Simulator app; a signed physical-device build and distribution require the applicable signing configuration. Desktop installers are produced independently for each runner OS.
 
-- Focused AURA core, runtime and assistant tests were previously exercised locally.
-- Three recovery cryptography tests have been run locally and pass.
-- CI now syntax-checks the recovery service, runs workspace tests and builds the recovery Docker image.
-- A separate GitHub Actions workflow is configured to compile the Android debug APK against the pinned llama.cpp revision and upload it as an artifact.
-- A full repository CI run, native Android APK build and physical-device test have not yet been confirmed.
-
-The recovery API is deployable with Docker Compose or Railway. It is not yet deployed to a live server. iOS native recovery integration is not yet implemented.
+The Android native APK build and physical-device test have not yet been confirmed. The recovery API is deployable with Docker Compose or Railway but is not yet confirmed deployed to a live server. The desktop and iOS interfaces are currently shells; shared runtime, encrypted memory and recovery-service adapters still need to be integrated and tested on each platform.
 
 Run workspace tests from a local clone:
 
@@ -55,7 +59,7 @@ npm test
 ```
 
 For recovery deployment instructions, see `packages/recovery-server/README.md`. The local secret bootstrap script is `scripts/bootstrap-recovery-secrets.sh`.
- 
+
 ## Upstream dependencies
 
 The initial audit has approved three runtime candidates, pinned in `UPSTREAM_MANIFEST.md`:
@@ -66,10 +70,8 @@ The initial audit has approved three runtime candidates, pinned in `UPSTREAM_MAN
 
 From a local Git clone, run `bash scripts/bootstrap-upstreams.sh` to register and check out the pinned submodules. This requires Git and network access. The script has not been executed by the GitHub connector, so the submodule source trees are not yet present in this repository.
 
-Research-only candidates and licensing restrictions are documented in the manifest. Never incorporate a project with an unverified or incompatible licence into a distributed build.
+## Platform integration policy
 
-## Platform reality
-
-Android and iOS have different device-management permissions. AURA Guard will expose only capabilities actually granted by the operating system. Offline devices cannot receive remote commands until connectivity returns; AURA queues expiring commands and reports their delivery state rather than pretending they were executed.
+AURA's product roadmap describes intended capabilities. Each platform adapter must inspect and report what the current device and deployment can actually provide. If a capability depends on an OS entitlement, developer agreement, enterprise/managed-device program, regional availability, hardware, or partner approval, record the requirement and pursue it during operationalization. Keep the interface and shared contract capable of representing approval-pending and deployment-specific states.
 
 See [Architecture](docs/ARCHITECTURE.md), [Security boundaries](docs/SECURITY-BOUNDARIES.md), [Upstream manifest](UPSTREAM_MANIFEST.md) and [Third-party notices](THIRD_PARTY_NOTICES.md).
