@@ -39,7 +39,6 @@ test("registered device capabilities are validated and enforced",()=>{
  const limitedPublic=limited.publicKey.export({type:"spki",format:"pem"});
  const limitedPrivate=limited.privateKey.export({type:"pkcs8",format:"pem"});
  authority.registerDevice({deviceId:"device-limited-1",publicKeyPem:limitedPublic,capabilities:["device.lock.supported"]});
- const signed=authority.issueCommand({deviceId:"device-limited-1",command:"recovery.checkin",requestedBy:"account-123456",privateKeyPem:limitedPrivate});
- assert.equal(authority.verifyAndConsume(signed).reason,"capability_not_granted");
+ assert.throws(()=>authority.issueCommand({deviceId:"device-limited-1",command:"recovery.checkin",requestedBy:"account-123456",privateKeyPem:limitedPrivate}),/capability required/);
  assert.throws(()=>authority.registerDevice({deviceId:"device-invalid-1",publicKeyPem:limitedPublic,capabilities:["device.erase.everything"]}),/allowlist/);
 });
