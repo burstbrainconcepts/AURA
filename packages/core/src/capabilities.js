@@ -4,14 +4,25 @@
  */
 export const CAPABILITIES = Object.freeze([
   "assistant.chat.local",
+  "assistant.inference.local",
   "assistant.voice.listen",
   "assistant.voice.speak",
+  "assistant.voice.offline",
+  "memory.encrypted",
+  "memory.sync",
   "device.session.revoke",
   "device.lock.supported",
+  "device.remote_lock",
   "device.location.user_consented",
+  "device.location.background",
   "device.recovery.queue",
+  "device.management.enrollment",
   "automation.alarm",
-  "automation.reminder"
+  "automation.reminder",
+  "automation.background",
+  "desktop.system_tray",
+  "desktop.startup",
+  "desktop.file_access"
 ]);
 
 export function createCapabilitySnapshot({ deviceId, platform, observedAt, granted = [] }) {
