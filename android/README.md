@@ -18,7 +18,7 @@ AURA is a native Kotlin Android app with a CPU-first llama.cpp JNI runtime.
 - The starter model is deliberately small; response quality and speed are lower than larger hosted models.
 - On-device speech recognition and offline TTS depend on compatible language services/voices already installed on the phone.
 - A device with insufficient free RAM may fail to load the model.
-- Device protection, background recovery delivery, and privileged device-admin actions are separate features and are not enabled by this assistant shell.
+- The app includes an optional Android Device Admin permission limited to the force-lock policy. The user must enable it in Android settings and confirm each immediate lock action. Remote recovery delivery, remote location, wipe, password reset, and covert monitoring are not implemented.
 - The debug APK is not a production-signed release.
 
 ## Cloud build
