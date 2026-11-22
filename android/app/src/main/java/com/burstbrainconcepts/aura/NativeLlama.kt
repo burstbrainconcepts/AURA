@@ -6,6 +6,6 @@ object NativeLlama {
     }
 
     external fun nativeLoadModel(modelPath: String): Boolean
-    external fun nativeGenerate(prompt: String, maxTokens: Int): String
+    external fun nativeGenerate(systemPrompt: String, prompt: String, maxTokens: Int): String
     external fun nativeUnloadModel()
 }
