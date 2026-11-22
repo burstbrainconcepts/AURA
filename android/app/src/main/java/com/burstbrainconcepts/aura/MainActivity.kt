@@ -250,6 +250,16 @@ class MainActivity : Activity() {
         AlertDialog.Builder(this).setTitle("Enable lost-device location check-ins?")
             .setMessage("When enabled, AURA may send this device location to your linked AURA Recovery account during periodic background check-ins. Location is off by default. Android will ask for location permission, including Allow all the time. You can disable this at any time.")
             .setNegativeButton("Not now", null)
+            .setNeutralButton("Clear saved location") { _, _ ->
+                executor.execute {
+                    try {
+                        recovery.clearLastLocation()
+                        runOnUiThread { status.text = "Last stored recovery location cleared." }
+                    } catch (_: Exception) {
+                        runOnUiThread { status.text = "Could not clear the last stored location. Check the recovery connection." }
+                    }
+                }
+            }
             .setPositiveButton("Continue") { _, _ -> requestLocationPermissionFlow() }.show()
     }
 
