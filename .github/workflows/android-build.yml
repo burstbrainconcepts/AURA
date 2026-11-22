@@ -6,10 +6,12 @@ on:
     paths:
       - "android/**"
       - ".github/workflows/android-build.yml"
+      - "UPSTREAM_MANIFEST.md"
   pull_request:
     paths:
       - "android/**"
       - ".github/workflows/android-build.yml"
+      - "UPSTREAM_MANIFEST.md"
   workflow_dispatch:
 
 permissions:
@@ -18,21 +20,34 @@ permissions:
 jobs:
   debug-apk:
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     steps:
       - name: Checkout AURA
         uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Fetch pinned llama.cpp source
+        run: |
+          mkdir -p upstream/engines
+          git clone --filter=blob:none --no-checkout https://github.com/ggml-org/llama.cpp.git upstream/engines/llama.cpp
+          git -C upstream/engines/llama.cpp fetch --depth 1 origin 94f3af3d09e74a0fb35f703194318d3b4037714a
+          git -C upstream/engines/llama.cpp checkout --detach 94f3af3d09e74a0fb35f703194318d3b4037714a
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+      - name: Install Android NDK and CMake
+        run: sdkmanager "ndk;27.2.12479018" "cmake;3.22.1"
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.9"
-      - name: Assemble debug APK
+      - name: Assemble native Android APK
         working-directory: android
-        run: gradle :app:assembleDebug
+        run: gradle :app:assembleDebug --stacktrace
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
