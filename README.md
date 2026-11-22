@@ -74,4 +74,4 @@ From a local Git clone, run `bash scripts/bootstrap-upstreams.sh` to register an
 
 AURA's product roadmap describes intended capabilities. Each platform adapter must inspect and report what the current device and deployment can actually provide. If a capability depends on an OS entitlement, developer agreement, enterprise/managed-device program, regional availability, hardware, or partner approval, record the requirement and pursue it during operationalization. Keep the interface and shared contract capable of representing approval-pending and deployment-specific states.
 
-See [Architecture](docs/ARCHITECTURE.md), [Security boundaries](docs/SECURITY-BOUNDARIES.md), [Upstream manifest](UPSTREAM_MANIFEST.md) and [Third-party notices](THIRD_PARTY_NOTICES.md).
+See [Local inference setup](docs/LOCAL-INFERENCE-SETUP.md), [Architecture](docs/ARCHITECTURE.md), [Security boundaries](docs/SECURITY-BOUNDARIES.md), [Upstream manifest](UPSTREAM_MANIFEST.md) and [Third-party notices](THIRD_PARTY_NOTICES.md).
