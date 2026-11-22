@@ -8,7 +8,7 @@ Tauri 2 application for Windows, macOS and Linux.
 - Local inference target is restricted to loopback addresses in this build.
 - Opt-in encrypted memory vault using AES-256-GCM and PBKDF2-HMAC-SHA256 (310,000 iterations). The user passphrase is required to unlock and is held in application memory only. The vault is stored in the OS application-data directory; on Unix the vault file is restricted to owner read/write.
 - Manual memory save, list, delete, lock and full vault deletion. Saved items are included as reference context only while the vault is unlocked.
-- Device Guard view currently explains the recovery service integration; desktop device management UI remains to be connected.
+- Device Guard controller connects to the AURA recovery API, lists enrolled devices, queues explicitly confirmed lock/location commands, clears stored locations and revokes device credentials. The account token is held in application memory only.
 
 ## Local inference
 
