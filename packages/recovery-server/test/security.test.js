@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { generateKeyPairSync } from "node:crypto";
+import { createPublicKey, generateKeyPairSync, sign, verify } from "node:crypto";
 import {
   canonicalCommand,
   createDeviceToken,
@@ -22,9 +22,9 @@ test("enrollment proof verifies against the registered device key", () => {
   const pair = generateKeyPairSync("ed25519");
   const publicKeyPem = pair.publicKey.export({ type: "spki", format: "pem" }).toString();
   const message = "AURA-ENROLL:v1:challenge-id:device-id:expires:nonce";
-  const signature = (awaitSign => awaitSign)(null);
-  assert.equal(typeof publicKeyPem, "string");
-  assert.equal(verifyEnrollmentProof({ publicKeyPem, message, signature: "invalid" }), false);
+  const signature = sign(null, Buffer.from(message), pair.privateKey).toString("base64");
+  assert.equal(verifyEnrollmentProof({ publicKeyPem, message, signature }), true);
+  assert.equal(verifyEnrollmentProof({ publicKeyPem, message: message + "x", signature }), false);
 });
 
 test("server signs canonical command envelopes with its own Ed25519 key", () => {
@@ -43,11 +43,10 @@ test("server signs canonical command envelopes with its own Ed25519 key", () => 
     requestedBy: "account-123456"
   };
   const signed = signCommand(envelope, privateKey);
-  const publicKey = (await import("node:crypto")).createPublicKey(publicPem);
-  const valid = (await import("node:crypto")).verify(
+  const valid = verify(
     null,
     Buffer.from(canonicalCommand(envelope)),
-    publicKey,
+    createPublicKey(publicPem),
     Buffer.from(signed.signature, "base64")
   );
   assert.equal(valid, true);
