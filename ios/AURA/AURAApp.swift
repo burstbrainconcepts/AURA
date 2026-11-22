@@ -1,6 +1,137 @@
 import SwiftUI
 import Foundation
 import Combine
+import CryptoKit
+import Security
+
+
+private struct AuraMemoryItem: Codable, Identifiable {
+    let id: UUID
+    let text: String
+    let createdAt: Date
+}
+
+@MainActor
+final class AuraMemoryVault: ObservableObject {
+    @Published private(set) var items: [AuraMemoryItem] = []
+    @Published private(set) var enabled = UserDefaults.standard.bool(forKey: "aura.memory.enabled")
+    @Published var status = "Memory is off. Enable it to create an encrypted vault."
+
+    private let service = "com.burstbrainconcepts.aura.memory"
+    private let account = "vault-key"
+
+    init() {
+        if enabled { load() }
+    }
+
+    func setEnabled(_ value: Bool) {
+        if value {
+            do {
+                _ = try encryptionKey()
+                enabled = true
+                UserDefaults.standard.set(true, forKey: "aura.memory.enabled")
+                load()
+                status = "Encrypted memory is enabled. Save items manually."
+            } catch {
+                enabled = false
+                status = "Could not enable encrypted memory: " + error.localizedDescription
+            }
+        } else {
+            enabled = false
+            UserDefaults.standard.set(false, forKey: "aura.memory.enabled")
+            items.removeAll()
+            try? FileManager.default.removeItem(at: vaultURL)
+            deleteKey()
+            status = "Memory disabled. The encrypted vault and its key were deleted."
+        }
+    }
+
+    func add(_ text: String) {
+        guard enabled else { status = "Enable memory before saving."; return }
+        let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty, value.count <= 8000 else { status = "Memory must contain 1–8000 characters."; return }
+        items.append(AuraMemoryItem(id: UUID(), text: value, createdAt: Date()))
+        do { try persist(); status = "Saved securely on this device." }
+        catch { items.removeLast(); status = "Could not save memory: " + error.localizedDescription }
+    }
+
+    func delete(_ id: UUID) {
+        let previous = items
+        items.removeAll { $0.id == id }
+        do { try persist(); status = "Memory item deleted." }
+        catch { items = previous; status = "Could not update vault: " + error.localizedDescription }
+    }
+
+    private var vaultURL: URL {
+        let root = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        return root.appendingPathComponent("AURA", isDirectory: true).appendingPathComponent("memory.aesgcm")
+    }
+
+    private func encryptionKey() throws -> SymmetricKey {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        var result: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        if status == errSecSuccess, let data = result as? Data {
+            return SymmetricKey(data: data)
+        }
+        guard status == errSecItemNotFound else {
+            throw NSError(domain: NSOSStatusErrorDomain, code: Int(status))
+        }
+        let key = SymmetricKey(size: .bits256)
+        let data = key.withUnsafeBytes { Data($0) }
+        let add: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+            kSecValueData as String: data
+        ]
+        let addStatus = SecItemAdd(add as CFDictionary, nil)
+        guard addStatus == errSecSuccess else { throw NSError(domain: NSOSStatusErrorDomain, code: Int(addStatus)) }
+        return key
+    }
+
+    private func persist() throws {
+        guard enabled else { return }
+        let directory = vaultURL.deletingLastPathComponent()
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let plaintext = try JSONEncoder().encode(items)
+        let sealed = try AES.GCM.seal(plaintext, using: encryptionKey())
+        guard let combined = sealed.combined else {
+            throw NSError(domain: "AURA.Memory", code: 1, userInfo: [NSLocalizedDescriptionKey: "Unable to encode encrypted memory."])
+        }
+        try combined.write(to: vaultURL, options: [.atomic, .completeFileProtection])
+    }
+
+    private func load() {
+        guard enabled, FileManager.default.fileExists(atPath: vaultURL.path) else { items = []; return }
+        do {
+            let combined = try Data(contentsOf: vaultURL)
+            let box = try AES.GCM.SealedBox(combined: combined)
+            let plaintext = try AES.GCM.open(box, using: encryptionKey())
+            items = try JSONDecoder().decode([AuraMemoryItem].self, from: plaintext)
+            status = "Loaded \(items.count) encrypted memory items."
+        } catch {
+            items = []
+            status = "Vault could not be opened. Existing encrypted data was preserved."
+        }
+    }
+
+    private func deleteKey() {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account
+        ]
+        SecItemDelete(query as CFDictionary)
+    }
+}
 
 private struct AuraChatMessage: Codable, Identifiable {
     var role: String
@@ -117,6 +248,8 @@ struct AURAApp: App {
 
 struct ContentView: View {
     @StateObject private var assistant = AuraAssistantModel()
+    @StateObject private var memoryVault = AuraMemoryVault()
+    @State private var memoryDraft = ""
     @State private var selectedTab = 0
     @State private var message = ""
 
@@ -202,7 +335,36 @@ struct ContentView: View {
     }
 
     private var memory: some View {
-        infoPage(icon: "lock.fill", title: "Your memory. Your choice.", detail: "The shared encrypted-memory contract will connect through native secure storage. Memory will remain opt-in, reviewable and deletable.")
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Private memory").font(.system(size: 27, weight: .semibold, design: .rounded))
+            Text("Only items you explicitly save are stored. Encryption keys stay in the iOS Keychain.")
+                .font(.subheadline).foregroundStyle(.secondary)
+            Toggle("Enable encrypted memory", isOn: Binding(
+                get: { memoryVault.enabled },
+                set: { memoryVault.setEnabled($0) }
+            ))
+            .tint(.indigo)
+            if memoryVault.enabled {
+                TextField("Write something to remember…", text: $memoryDraft, axis: .vertical)
+                    .lineLimit(2...5).padding(12).background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
+                Button("Save to encrypted memory") {
+                    memoryVault.add(memoryDraft)
+                    memoryDraft = ""
+                }.buttonStyle(.borderedProminent).tint(.indigo)
+                List {
+                    ForEach(memoryVault.items) { item in
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text(item.text).foregroundStyle(.primary)
+                            Text(item.createdAt.formatted(date: .abbreviated, time: .shortened)).font(.caption2).foregroundStyle(.secondary)
+                            Button("Delete", role: .destructive) { memoryVault.delete(item.id) }
+                                .font(.caption)
+                        }.listRowBackground(Color.white.opacity(0.04))
+                    }
+                }.scrollContentBackground(.hidden)
+            }
+            Text(memoryVault.status).font(.caption).foregroundStyle(.secondary)
+            Spacer(minLength: 0)
+        }.padding(22)
     }
 
     private var guardView: some View {
