@@ -36,6 +36,7 @@ final class AuraMemoryVault: ObservableObject {
                 status = "Encrypted memory is enabled. Save items manually."
             } catch {
                 enabled = false
+                UserDefaults.standard.set(false, forKey: "aura.memory.enabled")
                 status = "Could not enable encrypted memory: " + error.localizedDescription
             }
         } else {
