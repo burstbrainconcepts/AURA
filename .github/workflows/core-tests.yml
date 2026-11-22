@@ -22,5 +22,7 @@ jobs:
           node-version: 22
       - run: npm install --ignore-scripts
       - name: Validate recovery server JavaScript syntax
-        run: node --check packages/recovery-server/src/server.js && node --check packages/recovery-server/src/security.js && node --check packages/recovery-server/src/migrate.js
+        run: node --check packages/recovery-server/src/server.js && node --check packages/recovery-server/src/security.js && node --check packages/recovery-server/src/migrate.js && node --check recovery-console/app.js
       - run: npm test
+      - name: Build recovery API container
+        run: docker build -t aura-recovery:ci .
