@@ -361,13 +361,26 @@ async function route(req, res) {
       requestedBy: account.id
     }, now);
     const signedPayload = signCommand(envelope, commandPrivateKey);
-    await pool.query(
-      `INSERT INTO aura_commands (id, account_id, device_id, command, signed_payload, issued_at, expires_at)
-       VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7)`,
-      [envelope.commandId, account.id, body.deviceId, body.command, JSON.stringify(signedPayload),
-       envelope.issuedAt, envelope.expiresAt]
-    );
-    await audit(account.id, body.deviceId, "command.issued", { command: body.command, commandId: envelope.commandId });
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        `INSERT INTO aura_commands (id, account_id, device_id, command, signed_payload, issued_at, expires_at)
+         VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7)`,
+        [envelope.commandId, account.id, body.deviceId, body.command, JSON.stringify(signedPayload),
+         envelope.issuedAt, envelope.expiresAt]
+      );
+      await client.query(
+        "INSERT INTO aura_audit_events (account_id, device_id, event_type, metadata) VALUES ($1, $2, $3, $4::jsonb)",
+        [account.id, body.deviceId, "command.issued", JSON.stringify({ command: body.command, commandId: envelope.commandId })]
+      );
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => {});
+      throw error;
+    } finally {
+      client.release();
+    }
     return send(res, 201, { commandId: envelope.commandId, expiresAt: envelope.expiresAt, queued: true });
   }
 
