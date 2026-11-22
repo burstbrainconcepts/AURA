@@ -10,7 +10,8 @@ AURA's first remote recovery service: PostgreSQL-backed device enrollment, accou
 - Account-scoped device listing and revocation.
 - Server-side Ed25519 signatures for queued commands. Device identity keys and command-signing keys are separate.
 - Capability checks, explicit account approval for screen-lock and location-refresh commands, short command expiry, and device acknowledgements.
-- PostgreSQL audit events for enrollment, revocation, command issuance, and acknowledgements.
+- PostgreSQL audit events for enrollment, revocation, command issuance, acknowledgements, and consented location updates.
+- Opt-in location check-ins are accepted only when the enrolled device declared the location-consent capability; stale or out-of-range coordinates are rejected. Account owners can view the last reported coordinates and clear them.
 - No remote wipe, passcode reset, covert tracking, camera activation, or bypass of native operating-system permissions.
 
 ## Required environment
@@ -66,6 +67,8 @@ The service must be exposed through HTTPS (for example, behind Caddy or another 
 - `POST /v1/enrollment/complete` — account bearer token; challenge ID, same public key, and device signature.
 - `GET /v1/devices` — account bearer token.
 - `POST /v1/devices/{deviceId}/revoke` — account bearer token.
+- `POST /v1/devices/{deviceId}/location/clear` — account bearer token; clears the last stored coordinates.
+- `POST /v1/device/checkin` — device bearer token; heartbeat, with optional coordinates only when the device enrolled with explicit location consent.
 - `POST /v1/commands` — account bearer token; target device, allowlisted command, and explicit `userApproved: true` for protected actions.
 - `GET /v1/device/commands` — device bearer token; returns unexpired signed commands.
 - `POST /v1/device/commands/{commandId}/ack` — device bearer token; `executed`, `failed`, or `rejected`.
