@@ -376,6 +376,8 @@ struct ContentView: View {
     @StateObject private var recovery = AuraRecoveryModel()
     @State private var pendingDevice: AuraRecoveryDevice?
     @State private var pendingCommand = ""
+    @State private var pendingRevokeID: String?
+    @State private var showRevokeAlert = false
     @State private var memoryDraft = ""
     @State private var selectedTab = 0
     @State private var message = ""
@@ -420,6 +422,15 @@ struct ContentView: View {
             Button("Cancel", role: .cancel) { pendingDevice = nil }
         } message: {
             Text("This queues a signed, expiring command. It does not guarantee execution; the target device must be online and have the required capability.")
+        }
+        .alert("Revoke device access?", isPresented: $showRevokeAlert) {
+            Button("Revoke device", role: .destructive) {
+                if let id = pendingRevokeID { Task { await recovery.revoke(deviceId: id) } }
+                pendingRevokeID = nil
+            }
+            Button("Cancel", role: .cancel) { pendingRevokeID = nil }
+        } message: {
+            Text("This revokes the device's recovery credentials and cannot be undone from this screen.")
         }
     }
 
@@ -547,7 +558,8 @@ struct ContentView: View {
                                     .buttonStyle(.bordered)
                             }
                             Button("Revoke", role: .destructive) {
-                                Task { await recovery.revoke(deviceId: device.id) }
+                                pendingRevokeID = device.id
+                                showRevokeAlert = true
                             }.font(.caption)
                         }
                     }.listRowBackground(Color.white.opacity(0.04))
