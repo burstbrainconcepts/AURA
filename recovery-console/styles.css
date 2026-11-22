@@ -33,6 +33,7 @@ button:disabled { opacity: .4; cursor: not-allowed; }
 .section-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
 .section-heading h2 { margin: 0; font-size: 23px; letter-spacing: -.04em; }
 .status { min-height: 22px; color: #aab8d2; font-size: 12px; }
+.status.error { color: #ff9bb7; }
 .device-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
 .device-card { padding: 18px; border: 1px solid #2c3954; border-radius: 16px; background: rgba(19, 29, 48, .9); }
 .device-card h3 { margin: 0 0 6px; font-size: 16px; overflow-wrap: anywhere; }
