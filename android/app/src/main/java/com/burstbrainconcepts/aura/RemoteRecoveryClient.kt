@@ -38,6 +38,18 @@ class RemoteRecoveryClient(context: Context) {
 
     fun savedServerUrl(): String = store.read().optString("serverUrl")
 
+    fun isLocationOptIn(): Boolean = store.isLocationOptIn()
+
+    fun setLocationOptIn(enabled: Boolean) = store.setLocationOptIn(enabled)
+
+    fun refreshEnrollmentCapabilities(): String {
+        val config = store.read()
+        val server = config.optString("serverUrl")
+        val account = config.optString("accountToken")
+        require(server.isNotBlank() && account.length >= 32) { "Connect AURA Recovery before changing recovery capabilities." }
+        return enroll(server, account)
+    }
+
     fun enroll(serverUrl: String, accountToken: String, label: String = "Android device"): String {
         require(Build.VERSION.SDK_INT >= 33) { "This Android version does not provide the required Ed25519 provider." }
         val base = normalizeServerUrl(serverUrl)
@@ -61,6 +73,7 @@ class RemoteRecoveryClient(context: Context) {
         val capabilities = JSONArray().put("device.recovery.queue")
         val manager = app.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
         if (manager.isAdminActive(deviceAdmin)) capabilities.put("device.lock.supported")
+        if (store.isLocationOptIn() && hasBackgroundLocationPermission()) capabilities.put("device.location.user_consented")
 
         val challengeRequest = JSONObject()
             .put("deviceId", deviceId)
@@ -156,7 +169,18 @@ class RemoteRecoveryClient(context: Context) {
             acknowledge(base, token, commandId, result, detail)
             handled++
         }
+        val checkin = JSONObject()
+        if (store.isLocationOptIn() && hasBackgroundLocationPermission()) {
+            RecoveryLocationProvider(app).getFreshLocation()?.let { checkin.put("location", it) }
+        }
+        request(base, "POST", "/v1/device/checkin", token, checkin)
         return handled
+    }
+
+    private fun hasBackgroundLocationPermission(): Boolean {
+        return Build.VERSION.SDK_INT < 29 ||
+            app.checkSelfPermission(android.Manifest.permission.ACCESS_BACKGROUND_LOCATION) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
     }
 
     private fun verifyCommand(
