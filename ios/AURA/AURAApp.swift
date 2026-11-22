@@ -50,6 +50,7 @@ final class AuraMemoryVault: ObservableObject {
         guard enabled else { status = "Enable memory before saving."; return }
         let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty, value.count <= 8000 else { status = "Memory must contain 1–8000 characters."; return }
+        guard items.count < 1000 else { status = "Memory vault is limited to 1,000 items."; return }
         items.append(AuraMemoryItem(id: UUID(), text: value, createdAt: Date()))
         do { try persist(); status = "Saved securely on this device." }
         catch { items.removeLast(); status = "Could not save memory: " + error.localizedDescription }
@@ -118,7 +119,11 @@ final class AuraMemoryVault: ObservableObject {
             let combined = try Data(contentsOf: vaultURL)
             let box = try AES.GCM.SealedBox(combined: combined)
             let plaintext = try AES.GCM.open(box, using: encryptionKey(createIfMissing: false))
-            items = try JSONDecoder().decode([AuraMemoryItem].self, from: plaintext)
+            let decoded = try JSONDecoder().decode([AuraMemoryItem].self, from: plaintext)
+            guard decoded.count <= 1000, decoded.allSatisfy({ !$0.text.isEmpty && $0.text.count <= 8000 }) else {
+                throw NSError(domain: "AURA.Memory", code: 3, userInfo: [NSLocalizedDescriptionKey: "Vault contents failed validation."])
+            }
+            items = decoded
             status = "Loaded \(items.count) encrypted memory items."
         } catch {
             items = []
