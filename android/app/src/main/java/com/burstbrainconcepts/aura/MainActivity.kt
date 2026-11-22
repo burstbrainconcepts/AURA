@@ -7,10 +7,10 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
-import android.view.Gravity
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.EditText
@@ -30,6 +30,10 @@ class MainActivity : Activity() {
     private lateinit var input: EditText
     private lateinit var send: Button
     private lateinit var download: Button
+    private lateinit var mic: Button
+    private lateinit var speakToggle: Button
+    private lateinit var voice: OfflineVoiceController
+    private var speakReplies = false
     private var activeDownloadId = -1L
     private var modelReady = false
 
@@ -52,6 +56,13 @@ class MainActivity : Activity() {
             registerReceiver(downloadReceiver, filter)
         }
         buildInterface()
+        voice = OfflineVoiceController(
+            this,
+            { spoken -> runOnUiThread { input.setText(spoken) } },
+            { message -> runOnUiThread { status.text = message } }
+        )
+        voice.initialize()
+
         val modelFile = modelFile()
         if (modelFile.exists()) {
             status.text = "Checking downloaded offline model..."
@@ -97,6 +108,25 @@ class MainActivity : Activity() {
             maxLines = 4
             isEnabled = false
         }
+        val voiceControls = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+        }
+        mic = Button(this).apply {
+            text = "🎙 Speak"
+            isEnabled = false
+            setOnClickListener { voice.startListening() }
+        }
+        speakToggle = Button(this).apply {
+            text = "Voice replies: off"
+            isEnabled = false
+            setOnClickListener {
+                speakReplies = !speakReplies
+                text = if (speakReplies) "Voice replies: on" else "Voice replies: off"
+                if (!speakReplies) voice.stopSpeaking()
+            }
+        }
+        voiceControls.addView(mic, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        voiceControls.addView(speakToggle, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         send = Button(this).apply {
             text = "Send"
             isEnabled = false
@@ -109,6 +139,7 @@ class MainActivity : Activity() {
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         root.addView(input, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        root.addView(voiceControls)
         root.addView(send)
         setContentView(root)
     }
@@ -194,7 +225,9 @@ class MainActivity : Activity() {
                     download.isEnabled = false
                     input.isEnabled = true
                     send.isEnabled = true
-                    append("AURA", "I'm ready. Your messages are processed locally on this device.")
+                    mic.isEnabled = voice.isOnDeviceRecognitionAvailable()
+                    speakToggle.isEnabled = true
+                    append("AURA", "I'm ready. Your messages are processed locally on this device. Tap the microphone for on-device speech input or enable voice replies if an offline voice is installed.")
                 }
             } catch (error: Exception) {
                 runOnUiThread {
@@ -216,6 +249,7 @@ class MainActivity : Activity() {
         while (conversation.size > 12) conversation.removeAt(0)
         send.isEnabled = false
         input.isEnabled = false
+        mic.isEnabled = false
         status.text = "OFFLINE AI • thinking..."
         val prompt = conversation.joinToString("\n") { (role, message) -> "$role: $message" } + "\nAURA:"
         executor.execute {
@@ -229,6 +263,8 @@ class MainActivity : Activity() {
                     status.text = "OFFLINE AI READY • no network required"
                     send.isEnabled = true
                     input.isEnabled = true
+                    mic.isEnabled = voice.isOnDeviceRecognitionAvailable()
+                    if (speakReplies) voice.speak(answer)
                 }
             } catch (error: Exception) {
                 runOnUiThread {
@@ -236,6 +272,7 @@ class MainActivity : Activity() {
                     status.text = "OFFLINE AI • ready to retry"
                     send.isEnabled = true
                     input.isEnabled = true
+                    mic.isEnabled = voice.isOnDeviceRecognitionAvailable()
                 }
             }
         }
@@ -245,8 +282,21 @@ class MainActivity : Activity() {
         transcript.append("\n$speaker\n$text\n")
     }
 
+    @Deprecated("Use permission result API")
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == OfflineVoiceController.REQUEST_AUDIO) {
+            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                voice.startListening()
+            } else {
+                status.text = "Microphone permission was not granted."
+            }
+        }
+    }
+
     override fun onDestroy() {
         try { unregisterReceiver(downloadReceiver) } catch (_: Exception) { }
+        voice.shutdown()
         executor.shutdownNow()
         try { NativeLlama.nativeUnloadModel() } catch (_: UnsatisfiedLinkError) { }
         super.onDestroy()
