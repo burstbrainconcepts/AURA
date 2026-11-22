@@ -139,13 +139,18 @@ Java_com_burstbrainconcepts_aura_NativeLlama_nativeLoadModel(
 
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_burstbrainconcepts_aura_NativeLlama_nativeGenerate(
-        JNIEnv * env, jobject, jstring prompt_value, jint max_tokens) {
+        JNIEnv * env, jobject, jstring system_value, jstring prompt_value, jint max_tokens) {
     std::lock_guard<std::mutex> lock(g_mutex);
     if (!g_model || !g_context) {
         throw_java(env, "Load an offline model before sending messages.");
         return nullptr;
     }
+    const std::string system_prompt = jstring_to_string(env, system_value);
     const std::string user_prompt = jstring_to_string(env, prompt_value);
+    if (system_prompt.empty() || system_prompt.size() > 6000) {
+        throw_java(env, "System context must contain between 1 and 6,000 characters.");
+        return nullptr;
+    }
     if (user_prompt.empty() || user_prompt.size() > 12000) {
         throw_java(env, "Prompt must contain between 1 and 12,000 characters.");
         return nullptr;
@@ -154,7 +159,7 @@ Java_com_burstbrainconcepts_aura_NativeLlama_nativeGenerate(
     const llama_vocab * vocab = llama_model_get_vocab(g_model);
     const char * chat_template = llama_model_chat_template(g_model, nullptr);
     llama_chat_message messages[] = {
-        {"system", "You are AURA, a helpful and honest private assistant. Be clear, useful and safe. Do not claim actions you have not performed."},
+        {"system", system_prompt.c_str()},
         {"user", user_prompt.c_str()}
     };
 
