@@ -23,6 +23,15 @@ export function parseEd25519PublicKey(pem) {
   return key;
 }
 
+export function createEnrollmentMessage({
+  challengeId, deviceId, publicKeySha256, capabilities, platform, label, expiresAt, challenge
+}) {
+  return JSON.stringify({
+    version: 1, challengeId, deviceId, publicKeySha256,
+    capabilities, platform, label, expiresAt, challenge
+  });
+}
+
 export function verifyEnrollmentProof({ publicKeyPem, message, signature }) {
   const key = parseEd25519PublicKey(publicKeyPem);
   if (typeof signature !== "string" || signature.length > 512) return false;
