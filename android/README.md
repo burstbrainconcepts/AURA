@@ -15,6 +15,7 @@ AURA is a native Kotlin Android app with a CPU-first llama.cpp JNI runtime.
 - Remote recovery enrollment uses a device-generated Ed25519 key and a one-time challenge. Device keys, account/device tokens, the server verification key, and replay state are encrypted at rest with Android Keystore.
 - Remote commands are signed by the recovery server and verified on-device before processing. The Android client currently executes only the lock command (when Device Admin is enabled) and the recovery check-in command.
 - WorkManager checks the recovery queue periodically when Android grants network execution time. The app also has a manual check button.
+- Optional lost-device location check-ins are off by default. The user must opt in, grant foreground and background location permissions, and enroll the location capability. Fresh GPS/network fixes are sent over HTTPS during periodic check-ins. Turning the feature off removes the capability and asks the server to clear the last stored location.
 
 ## Remote recovery setup
 
@@ -27,7 +28,7 @@ The current Android remote-recovery client requires Android 13+ for the platform
 - The starter model is deliberately small; response quality and speed are lower than larger hosted models.
 - On-device speech recognition and offline TTS depend on compatible language services/voices already installed on the phone.
 - A device with insufficient free RAM may fail to load the model.
-- Remote location reporting, remote session revocation, remote wipe, passcode reset, camera activation, and covert monitoring are not implemented.
+- Remote session revocation, remote wipe, passcode reset, camera activation, and covert monitoring are not implemented.
 - The debug APK is not a production-signed release.
 
 ## Cloud build
