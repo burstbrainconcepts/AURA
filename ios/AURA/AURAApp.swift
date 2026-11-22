@@ -296,7 +296,12 @@ final class AuraRecoveryModel: ObservableObject {
         } catch { status = "Recovery connection failed: " + error.localizedDescription }
     }
 
+    private func validDeviceId(_ value: String) -> Bool {
+        value.range(of: "^[A-Za-z0-9._:-]{8,128}$", options: .regularExpression) != nil
+    }
+
     func queueCommand(deviceId: String, command: String) async {
+        guard validDeviceId(deviceId) else { status = "Invalid device identifier."; return }
         guard ["device.lock", "location.refresh"].contains(command) else {
             status = "This recovery command is not enabled in the client."
             return
@@ -310,6 +315,7 @@ final class AuraRecoveryModel: ObservableObject {
     }
 
     func revoke(deviceId: String) async {
+        guard validDeviceId(deviceId) else { status = "Invalid device identifier."; return }
         do {
             _ = try await request(path: "/v1/devices/\(deviceId)/revoke", method: "POST")
             status = "Device credentials revoked."
@@ -318,6 +324,7 @@ final class AuraRecoveryModel: ObservableObject {
     }
 
     func clearLocation(deviceId: String) async {
+        guard validDeviceId(deviceId) else { status = "Invalid device identifier."; return }
         do {
             _ = try await request(path: "/v1/devices/\(deviceId)/location/clear", method: "POST")
             status = "Stored location cleared."
