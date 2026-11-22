@@ -24,6 +24,7 @@ jobs:
             -project ios/AURA.xcodeproj \
             -scheme AURA \
             -sdk iphonesimulator \
+            -destination "generic/platform=iOS Simulator" \
             -configuration Debug \
             -derivedDataPath build/ios \
             CODE_SIGNING_ALLOWED=NO \
