@@ -1,0 +1,35 @@
+[submodule "upstream/engines/llama.cpp"]
+	path = upstream/engines/llama.cpp
+	url = https://github.com/ggml-org/llama.cpp.git
+
+[submodule "upstream/engines/whisper.cpp"]
+	path = upstream/engines/whisper.cpp
+	url = https://github.com/ggml-org/whisper.cpp.git
+
+[submodule "upstream/engines/openWakeWord"]
+	path = upstream/engines/openWakeWord
+	url = https://github.com/dscripka/openWakeWord.git
+
+[submodule "upstream/research/android/open-jarvis"]
+	path = upstream/research/android/open-jarvis
+	url = https://github.com/tokenarc/open-jarvis.git
+
+[submodule "upstream/research/android/naomi"]
+	path = upstream/research/android/naomi
+	url = https://github.com/mukeshchandu/Personal-AI-Assistant.git
+
+[submodule "upstream/research/android/eva"]
+	path = upstream/research/android/eva
+	url = https://github.com/x1watt/eva.git
+
+[submodule "upstream/research/android/faraday"]
+	path = upstream/research/android/faraday
+	url = https://github.com/CyberMagician/faraday.git
+
+[submodule "upstream/research/android/llmdroid"]
+	path = upstream/research/android/llmdroid
+	url = https://github.com/Zabuddia/llmdroid.git
+
+[submodule "upstream/research/cross-platform/nanoMuse"]
+	path = upstream/research/cross-platform/nanoMuse
+	url = https://github.com/nano-muse/nanoMuse.git
