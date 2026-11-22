@@ -93,6 +93,9 @@ fn validate_memory(items: &[MemoryItem]) -> Result<(), String> {
 
 #[tauri::command]
 fn memory_load(app: AppHandle, passphrase: String) -> Result<Vec<MemoryItem>, String> {
+    if passphrase.chars().count() < 12 || passphrase.len() > 1024 {
+        return Err("Vault passphrase must contain 12–1024 characters".into());
+    }
     let path = vault_path(&app)?;
     if !path.exists() { return Ok(Vec::new()); }
     let data = fs::read(path).map_err(|e| e.to_string())?;
@@ -136,8 +139,19 @@ fn memory_save(app: AppHandle, passphrase: String, items: Vec<MemoryItem>) -> Re
         use std::os::unix::fs::PermissionsExt;
         fs::set_permissions(&temporary, fs::Permissions::from_mode(0o600)).map_err(|e| e.to_string())?;
     }
-    if path.exists() { fs::remove_file(&path).map_err(|e| e.to_string())?; }
-    fs::rename(&temporary, &path).map_err(|e| e.to_string())?;
+    if path.exists() {
+        let backup = path.with_extension("aesgcm.backup");
+        if backup.exists() { fs::remove_file(&backup).map_err(|e| e.to_string())?; }
+        fs::rename(&path, &backup).map_err(|e| e.to_string())?;
+        if let Err(error) = fs::rename(&temporary, &path) {
+            let _ = fs::rename(&backup, &path);
+            let _ = fs::remove_file(&temporary);
+            return Err(error.to_string());
+        }
+        let _ = fs::remove_file(backup);
+    } else {
+        fs::rename(&temporary, &path).map_err(|e| e.to_string())?;
+    }
     Ok(())
 }
 
