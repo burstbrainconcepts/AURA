@@ -49,6 +49,16 @@ class EncryptedRecoveryStore(context: Context) {
     }
 
     @Synchronized
+    fun isLocationOptIn(): Boolean = read().optBoolean("locationOptIn", false)
+
+    @Synchronized
+    fun setLocationOptIn(enabled: Boolean) {
+        val value = read()
+        value.put("locationOptIn", enabled)
+        write(value)
+    }
+
+    @Synchronized
     fun consumeNonce(nonce: String): Boolean {
         val value = read()
         val entries = value.optJSONArray("processedNonces") ?: JSONArray()
