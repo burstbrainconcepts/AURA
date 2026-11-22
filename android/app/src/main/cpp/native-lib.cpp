@@ -171,11 +171,11 @@ Java_com_burstbrainconcepts_aura_NativeLlama_nativeGenerate(
     llama_sampler_chain_add(sampler, llama_sampler_init_dist(LLAMA_DEFAULT_SEED));
 
     std::string output;
-    const int32_t limit = std::max(1, std::min(512, static_cast<int>(max_tokens)));
+    const int32_t available = std::max(1, 2048 - tokenized - 1);
+    const int32_t limit = std::max(1, std::min({256, available, static_cast<int>(max_tokens)}));
     for (int32_t generated = 0; generated < limit; ++generated) {
         const llama_token next = llama_sampler_sample(sampler, g_context, -1);
         if (llama_vocab_is_eog(vocab, next)) break;
-        llama_sampler_accept(sampler, next);
 
         char piece[512];
         const int32_t piece_size = llama_token_to_piece(vocab, next, piece, sizeof(piece), 0, true);
