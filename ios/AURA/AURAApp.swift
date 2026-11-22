@@ -261,6 +261,7 @@ final class AuraSpeechController: ObservableObject {
     private let audioEngine = AVAudioEngine()
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
+    private var tapInstalled = false
 
     func start() {
         guard !isRecording else { return }
@@ -314,6 +315,7 @@ final class AuraSpeechController: ObservableObject {
             input.installTap(onBus: 0, bufferSize: 1024, format: format) { buffer, _ in
                 request.append(buffer)
             }
+            tapInstalled = true
             audioEngine.prepare()
             try audioEngine.start()
             isRecording = true
@@ -335,9 +337,10 @@ final class AuraSpeechController: ObservableObject {
     }
 
     func stop() {
-        if audioEngine.isRunning {
-            audioEngine.stop()
+        if audioEngine.isRunning { audioEngine.stop() }
+        if tapInstalled {
             audioEngine.inputNode.removeTap(onBus: 0)
+            tapInstalled = false
         }
         recognitionRequest?.endAudio()
         recognitionRequest = nil
