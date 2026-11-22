@@ -1,4 +1,105 @@
 import SwiftUI
+import Foundation
+
+private struct AuraChatMessage: Codable, Identifiable {
+    var role: String
+    var content: String
+    var id = UUID()
+    enum CodingKeys: String, CodingKey { case role, content }
+}
+
+private struct LocalChatRequest: Encodable {
+    let model: String
+    let messages: [AuraChatMessage]
+    let temperature: Double
+    let max_tokens: Int
+    let stream: Bool
+}
+
+private struct LocalChatResponse: Decodable {
+    struct Choice: Decodable {
+        struct Message: Decodable { let role: String?; let content: String }
+        let message: Message
+    }
+    let choices: [Choice]
+}
+
+@MainActor
+final class AuraAssistantModel: ObservableObject {
+    @Published var messages: [AuraChatMessage] = []
+    @Published var isBusy = false
+    @Published var engineOnline = false
+    @Published var status = "Checking local model…"
+    @Published var endpoint: String {
+        didSet { UserDefaults.standard.set(endpoint, forKey: "aura.inference.endpoint") }
+    }
+
+    init() {
+        endpoint = UserDefaults.standard.string(forKey: "aura.inference.endpoint") ?? "http://127.0.0.1:8080"
+    }
+
+    private func makeURL(_ suffix: String) throws -> URL {
+        let clean = endpoint.trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard let base = URL(string: clean),
+              ["http", "https"].contains(base.scheme?.lowercased() ?? ""),
+              base.host != nil, base.user == nil, base.password == nil else {
+            throw NSError(domain: "AURA", code: 1, userInfo: [NSLocalizedDescriptionKey: "Enter a valid HTTP or HTTPS local inference URL."])
+        }
+        return URL(string: clean + suffix)!
+    }
+
+    func checkHealth() async {
+        do {
+            let url = try makeURL("/health")
+            var request = URLRequest(url: url)
+            request.httpMethod = "GET"
+            request.timeoutInterval = 5
+            let (_, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+                throw NSError(domain: "AURA", code: 2, userInfo: [NSLocalizedDescriptionKey: "The local model server did not return a healthy response."])
+            }
+            engineOnline = true
+            status = "Local model connected"
+        } catch {
+            engineOnline = false
+            status = "Local model offline · " + error.localizedDescription
+        }
+    }
+
+    func send(_ text: String) async {
+        let prompt = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !prompt.isEmpty, !isBusy else { return }
+        isBusy = true
+        messages.append(AuraChatMessage(role: "user", content: prompt))
+        defer { isBusy = false }
+        do {
+            let url = try makeURL("/v1/chat/completions")
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.timeoutInterval = 120
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            let body = LocalChatRequest(model: "local-model", messages: messages, temperature: 0.7, max_tokens: 512, stream: false)
+            request.httpBody = try JSONEncoder().encode(body)
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+                throw NSError(domain: "AURA", code: 3, userInfo: [NSLocalizedDescriptionKey: "Local inference request failed. Check the server and endpoint."])
+            }
+            let result = try JSONDecoder().decode(LocalChatResponse.self, from: data)
+            guard let answer = result.choices.first?.message.content else {
+                throw NSError(domain: "AURA", code: 4, userInfo: [NSLocalizedDescriptionKey: "The local model returned no answer."])
+            }
+            messages.append(AuraChatMessage(role: "assistant", content: answer))
+            engineOnline = true
+            status = "Local model connected"
+        } catch {
+            messages.append(AuraChatMessage(role: "assistant", content: "I couldn't reach the local model: " + error.localizedDescription))
+            engineOnline = false
+            status = "Local model request failed"
+        }
+    }
+
+    func clearConversation() { messages.removeAll() }
+}
 
 @main
 struct AURAApp: App {
@@ -11,9 +112,9 @@ struct AURAApp: App {
 }
 
 struct ContentView: View {
+    @StateObject private var assistant = AuraAssistantModel()
     @State private var selectedTab = 0
     @State private var message = ""
-    @State private var messages: [String] = []
 
     var body: some View {
         ZStack {
@@ -30,63 +131,95 @@ struct ContentView: View {
                         Text("PRIVATE INTELLIGENCE").font(.system(size: 8, weight: .semibold)).tracking(1.7).foregroundStyle(.blue.opacity(0.8))
                     }
                     Spacer()
-                    Circle().fill(.green).frame(width: 7, height: 7)
-                    Text("Platform status").font(.caption2).foregroundStyle(.secondary)
+                    Circle().fill(assistant.engineOnline ? .green : .orange).frame(width: 7, height: 7)
+                    Text(assistant.engineOnline ? "Connected" : "Offline").font(.caption2).foregroundStyle(.secondary)
                 }.padding(.horizontal, 22).padding(.top, 14).padding(.bottom, 20)
 
                 TabView(selection: $selectedTab) {
-                    assistant.tag(0).tabItem { Label("Assistant", systemImage: "sparkles") }
+                    assistantView.tag(0).tabItem { Label("Assistant", systemImage: "sparkles") }
                     memory.tag(1).tabItem { Label("Memory", systemImage: "lock.shield") }
                     guardView.tag(2).tabItem { Label("Guard", systemImage: "shield.lefthalf.filled") }
                     settings.tag(3).tabItem { Label("Settings", systemImage: "slider.horizontal.3") }
                 }.tint(Color(red: 0.58, green: 0.68, blue: 1))
             }
         }
+        .task { await assistant.checkHealth() }
     }
 
-    private var assistant: some View {
-        VStack(spacing: 18) {
-            Spacer()
-            ZStack {
-                Circle().fill(Color.indigo.opacity(0.15)).frame(width: 106, height: 106)
-                Image(systemName: "sparkle").font(.system(size: 42, weight: .light)).foregroundStyle(Color(red: 0.68, green: 0.76, blue: 1))
-            }
-            Text("Think clearly.").font(.system(size: 32, weight: .semibold, design: .rounded))
-            Text("Move confidently.").font(.system(size: 25, weight: .medium, design: .rounded)).foregroundStyle(.blue.opacity(0.85))
-            Text("Your private, local-first assistant.").font(.subheadline).foregroundStyle(.secondary)
-            Spacer()
+    private var assistantView: some View {
+        VStack(spacing: 14) {
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Think clearly.").font(.system(size: 29, weight: .semibold, design: .rounded))
+                    Text("Move confidently.").font(.system(size: 22, weight: .medium, design: .rounded)).foregroundStyle(.blue.opacity(0.85))
+                }
+                Spacer()
+                Button { assistant.clearConversation() } label: {
+                    Image(systemName: "trash").foregroundStyle(.secondary).padding(10).background(.white.opacity(0.06), in: Circle())
+                }.accessibilityLabel("Clear conversation")
+            }.padding(.top, 10)
+
+            Text(assistant.status).font(.caption2).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
+
             ScrollView {
-                VStack(alignment: .trailing, spacing: 10) {
-                    ForEach(Array(messages.enumerated()), id: \.offset) { _, item in
-                        Text(item).padding(13).background(Color.indigo.opacity(0.3), in: RoundedRectangle(cornerRadius: 14))
+                LazyVStack(alignment: .leading, spacing: 12) {
+                    if assistant.messages.isEmpty {
+                        Text("Connect a local llama.cpp server in Settings, then start a private conversation.")
+                            .font(.subheadline).foregroundStyle(.secondary).padding(.top, 28)
                     }
-                }.frame(maxWidth: .infinity, alignment: .trailing)
-            }.frame(maxHeight: 170)
+                    ForEach(assistant.messages) { item in
+                        HStack {
+                            if item.role == "assistant" { messageBubble(item.content, assistant: true); Spacer(minLength: 35) }
+                            else { Spacer(minLength: 35); messageBubble(item.content, assistant: false) }
+                        }
+                    }
+                    if assistant.isBusy { ProgressView("AURA is thinking locally…").font(.caption).frame(maxWidth: .infinity, alignment: .leading) }
+                }
+            }
+            .frame(maxHeight: .infinity)
+
             HStack(spacing: 10) {
                 TextField("Message AURA...", text: $message, axis: .vertical).lineLimit(1...4).padding(13).background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 13))
                 Button {
-                    let value = message.trimmingCharacters(in: .whitespacesAndNewlines)
-                    guard !value.isEmpty else { return }
-                    messages.append(value)
+                    let value = message
                     message = ""
+                    Task { await assistant.send(value) }
                 } label: {
                     Image(systemName: "arrow.up").font(.headline).foregroundStyle(.white).frame(width: 45, height: 45).background(Color.indigo, in: RoundedRectangle(cornerRadius: 13))
-                }
-            }.padding(.bottom, 12)
-            Text("Preview interface · local inference adapter pending").font(.system(size: 10)).foregroundStyle(.secondary).padding(.bottom, 5)
+                }.disabled(assistant.isBusy || message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }.padding(.bottom, 8)
         }.padding(.horizontal, 22)
     }
 
+    private func messageBubble(_ text: String, assistant isAssistant: Bool) -> some View {
+        Text(text).font(.subheadline).textSelection(.enabled).padding(13)
+            .background(isAssistant ? Color.white.opacity(0.07) : Color.indigo.opacity(0.34), in: RoundedRectangle(cornerRadius: 14))
+            .frame(maxWidth: 310, alignment: .leading)
+    }
+
     private var memory: some View {
-        infoPage(icon: "lock.fill", title: "Your memory. Your choice.", detail: "AURA's shared encrypted-memory contract will connect through the native secure-storage adapter. Storage, sync and export capabilities will be exposed according to configured permissions and user choices.")
+        infoPage(icon: "lock.fill", title: "Your memory. Your choice.", detail: "The shared encrypted-memory contract will connect through native secure storage. Memory will remain opt-in, reviewable and deletable.")
     }
 
     private var guardView: some View {
-        infoPage(icon: "shield.lefthalf.filled", title: "Device protection", detail: "AURA Guard uses a capability-discovery layer. Available recovery, device-management, check-in and protection features will be determined at runtime from the device, account, configured entitlements and applicable platform agreements.")
+        infoPage(icon: "shield.lefthalf.filled", title: "Device protection", detail: "AURA Guard uses runtime capability discovery. Device management, recovery, check-ins and protection features will be evaluated against the current device, account, configured entitlements and applicable agreements.")
     }
 
     private var settings: some View {
-        infoPage(icon: "slider.horizontal.3", title: "AURA settings", detail: "Configure local models, voice, privacy, connected devices and recovery services. Platform integrations will report which capabilities are available, pending approval or unavailable.")
+        Form {
+            Section("Local AI engine") {
+                TextField("http://127.0.0.1:8080", text: $assistant.endpoint)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .keyboardType(.URL)
+                Button("Test local connection") { Task { await assistant.checkHealth() } }
+                Text(assistant.status).font(.caption).foregroundStyle(.secondary)
+            }
+            Section("Privacy") {
+                Text("Chat requests are sent to the local inference URL configured above. For a computer-hosted model, use its reachable local-network address and configure the inference server to accept connections from your phone.")
+                Text("Encrypted memory and recovery-service connection will be enabled after their native adapters are integrated.")
+            }
+        }.scrollContentBackground(.hidden)
     }
 
     private func infoPage(icon: String, title: String, detail: String) -> some View {
