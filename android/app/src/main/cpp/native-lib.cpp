@@ -178,7 +178,7 @@ Java_com_burstbrainconcepts_aura_NativeLlama_nativeGenerate(
         }
         formatted.assign(buffer.data(), static_cast<size_t>(written));
     } else {
-        formatted = "### System\nYou are AURA, a helpful and honest private assistant.\n### User\n" + user_prompt + "\n### Assistant\n";
+        formatted = "### System\n" + system_prompt + "\n### User\n" + user_prompt + "\n### Assistant\n";
     }
 
     const int32_t token_count = -llama_tokenize(vocab, formatted.c_str(), static_cast<int32_t>(formatted.size()), nullptr, 0, true, true);
@@ -225,6 +225,11 @@ Java_com_burstbrainconcepts_aura_NativeLlama_nativeGenerate(
 
     llama_sampler_chain_params sampler_params = llama_sampler_chain_default_params();
     llama_sampler * sampler = llama_sampler_chain_init(sampler_params);
+    if (!sampler) {
+        llama_batch_ext_free(batch);
+        throw_java(env, "Could not initialize the sampling pipeline.");
+        return nullptr;
+    }
     llama_sampler_chain_add(sampler, llama_sampler_init_top_k(40));
     llama_sampler_chain_add(sampler, llama_sampler_init_top_p(0.90f, 1));
     llama_sampler_chain_add(sampler, llama_sampler_init_temp(0.70f));
@@ -236,6 +241,7 @@ Java_com_burstbrainconcepts_aura_NativeLlama_nativeGenerate(
     for (int32_t generated = 0; generated < limit; ++generated) {
         const llama_token next = llama_sampler_sample(sampler, g_context, -1);
         if (llama_vocab_is_eog(vocab, next)) break;
+        llama_sampler_accept(sampler, next);
 
         char piece[512];
         const int32_t piece_size = llama_token_to_piece(vocab, next, piece, sizeof(piece), 0, true);
