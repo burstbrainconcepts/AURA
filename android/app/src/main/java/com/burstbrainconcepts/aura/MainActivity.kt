@@ -13,6 +13,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
+import android.text.InputType
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.EditText
@@ -40,6 +41,9 @@ class MainActivity : Activity() {
     private lateinit var memory: EncryptedMemoryStore
     private lateinit var memoryButton: Button
     private lateinit var rememberButton: Button
+    private lateinit var recovery: RemoteRecoveryClient
+    private lateinit var recoverySetupButton: Button
+    private lateinit var recoveryPollButton: Button
     private var lastUserMessage = ""
     private var lastAssistantMessage = ""
     private var speakReplies = false
@@ -67,6 +71,7 @@ class MainActivity : Activity() {
             registerReceiver(downloadReceiver, filter)
         }
         memory = EncryptedMemoryStore(this)
+        recovery = RemoteRecoveryClient(this)
         buildInterface()
         voice = OfflineVoiceController(
             this,
@@ -74,6 +79,15 @@ class MainActivity : Activity() {
             { message -> runOnUiThread { status.text = message } }
         )
         voice.initialize()
+        try {
+            if (recovery.isEnrolled()) {
+                RecoveryWorkScheduler.ensureScheduled(this)
+                recoverySetupButton.text = "Recovery linked"
+                recoveryPollButton.isEnabled = true
+            }
+        } catch (error: Exception) {
+            status.text = "Recovery credentials need attention: ${error.message ?: "storage error"}"
+        }
 
         val savedDownloadId = getSharedPreferences("aura_downloads", MODE_PRIVATE)
             .getLong("model_download_id", -1L)
@@ -137,6 +151,20 @@ class MainActivity : Activity() {
         }
         memoryControls.addView(memoryButton, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         memoryControls.addView(rememberButton, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        val recoveryControls = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+        }
+        recoverySetupButton = Button(this).apply {
+            text = "Link remote recovery"
+            setOnClickListener { showRecoverySetup() }
+        }
+        recoveryPollButton = Button(this).apply {
+            text = "Check now"
+            isEnabled = false
+            setOnClickListener { pollRecoveryNow() }
+        }
+        recoveryControls.addView(recoverySetupButton, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        recoveryControls.addView(recoveryPollButton, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         transcript = TextView(this).apply {
             text = "Welcome to AURA. Download the starter model once; after that, chat can run offline on this device.\n"
             textSize = 16f
@@ -181,6 +209,7 @@ class MainActivity : Activity() {
         root.addView(download)
         root.addView(deviceControls)
         root.addView(memoryControls)
+        root.addView(recoveryControls)
         root.addView(scroll, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         root.addView(input, LinearLayout.LayoutParams(
@@ -190,6 +219,93 @@ class MainActivity : Activity() {
         setContentView(root)
     }
 
+
+
+    private fun showRecoverySetup() {
+        if (Build.VERSION.SDK_INT < 33) {
+            AlertDialog.Builder(this)
+                .setTitle("Android version not supported")
+                .setMessage("Secure remote recovery currently requires Android 13 or later for the Ed25519 signing provider.")
+                .setPositiveButton("OK", null)
+                .show()
+            return
+        }
+        val layout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(32, 12, 32, 0)
+        }
+        val serverField = EditText(this).apply {
+            hint = "https://recovery.example.com"
+            setSingleLine(true)
+            setText(recovery.savedServerUrl())
+        }
+        val tokenField = EditText(this).apply {
+            hint = "Account API token"
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            setSingleLine(true)
+        }
+        layout.addView(serverField)
+        layout.addView(tokenField)
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("Connect AURA Recovery")
+            .setMessage("Enter your deployed AURA Recovery HTTPS address and account API token. Credentials and device keys are encrypted on this device.")
+            .setView(layout)
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Connect", null)
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val serverUrl = serverField.text.toString().trim()
+                val accountToken = tokenField.text.toString().trim()
+                if (serverUrl.isBlank() || accountToken.length < 32) {
+                    status.text = "Enter the HTTPS server URL and a valid account token."
+                    return@setOnClickListener
+                }
+                dialog.dismiss()
+                recoverySetupButton.isEnabled = false
+                status.text = "Securely enrolling this device..."
+                executor.execute {
+                    try {
+                        val deviceId = recovery.enroll(serverUrl, accountToken)
+                        RecoveryWorkScheduler.ensureScheduled(this)
+                        runOnUiThread {
+                            recoverySetupButton.text = "Recovery linked"
+                            recoverySetupButton.isEnabled = true
+                            recoveryPollButton.isEnabled = true
+                            status.text = "Remote recovery linked • device $deviceId • background checks scheduled"
+                        }
+                    } catch (error: Exception) {
+                        runOnUiThread {
+                            recoverySetupButton.isEnabled = true
+                            status.text = "Recovery enrollment failed: ${error.message ?: "connection error"}"
+                        }
+                    }
+                }
+            }
+        }
+        dialog.show()
+    }
+
+    private fun pollRecoveryNow() {
+        if (!recoveryPollButton.isEnabled) return
+        recoveryPollButton.isEnabled = false
+        status.text = "Checking signed recovery commands..."
+        executor.execute {
+            try {
+                val handled = recovery.pollAndExecute()
+                runOnUiThread {
+                    status.text = if (handled == 0) "Recovery check complete • no pending commands"
+                    else "Recovery check complete • processed $handled command(s)"
+                    recoveryPollButton.isEnabled = true
+                }
+            } catch (error: Exception) {
+                runOnUiThread {
+                    status.text = "Recovery check failed: ${error.message ?: "network error"}"
+                    recoveryPollButton.isEnabled = true
+                }
+            }
+        }
+    }
 
     private fun deviceAdminComponent(): ComponentName =
         ComponentName(this, AuraDeviceAdminReceiver::class.java)
