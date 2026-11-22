@@ -643,6 +643,8 @@ class MainActivity : Activity() {
                 val file = modelFile()
                 if (!file.exists() || file.length() < 300_000_000L) {
                     file.delete()
+                    getSharedPreferences("aura_downloads", MODE_PRIVATE).edit().remove("model_download_id").apply()
+                    activeDownloadId = -1L
                     throw IllegalStateException("The downloaded model is incomplete.")
                 }
                 val digest = MessageDigest.getInstance("SHA-256")
@@ -657,6 +659,8 @@ class MainActivity : Activity() {
                 val actual = digest.digest().joinToString("") { "%02x".format(it) }
                 if (!actual.equals(ModelCatalog.SHA256, ignoreCase = true)) {
                     file.delete()
+                    getSharedPreferences("aura_downloads", MODE_PRIVATE).edit().remove("model_download_id").apply()
+                    activeDownloadId = -1L
                     throw IllegalStateException("Model checksum did not match. The incomplete file was removed; download again.")
                 }
                 getSharedPreferences("aura_downloads", MODE_PRIVATE).edit().remove("model_download_id").apply()
