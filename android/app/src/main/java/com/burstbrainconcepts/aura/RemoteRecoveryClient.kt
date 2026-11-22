@@ -50,6 +50,15 @@ class RemoteRecoveryClient(context: Context) {
         return enroll(server, account)
     }
 
+    fun clearLastLocation() {
+        val config = store.read()
+        val server = normalizeServerUrl(config.optString("serverUrl"))
+        val account = config.optString("accountToken")
+        val deviceId = config.optString("deviceId")
+        require(account.length >= 32 && deviceId.isNotBlank()) { "Recovery account is not configured." }
+        request(server, "POST", "/v1/devices/$deviceId/location/clear", account, JSONObject())
+    }
+
     fun enroll(serverUrl: String, accountToken: String, label: String = "Android device"): String {
         require(Build.VERSION.SDK_INT >= 33) { "This Android version does not provide the required Ed25519 provider." }
         val base = normalizeServerUrl(serverUrl)
