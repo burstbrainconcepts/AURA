@@ -665,7 +665,7 @@ class MainActivity : Activity() {
                 }
                 getSharedPreferences("aura_downloads", MODE_PRIVATE).edit().remove("model_download_id").apply()
                 activeDownloadId = -1L
-                val loaded = NativeLlama.nativeLoadModel(file.absolutePath)
+                val loaded = loadNativeModel(file.absolutePath)
                 if (!loaded) throw IllegalStateException("The native AI engine could not load the model.")
                 modelReady = true
                 runOnUiThread {
@@ -689,6 +689,18 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun loadNativeModel(path: String): Boolean = try {
+        NativeLlama.nativeLoadModel(path)
+    } catch (error: UnsatisfiedLinkError) {
+        throw IllegalStateException("AURA native inference library is not packaged in this APK.", error)
+    }
+
+    private fun generateNative(systemPrompt: String, prompt: String, maxTokens: Int): String = try {
+        NativeLlama.nativeGenerate(systemPrompt, prompt, maxTokens)
+    } catch (error: UnsatisfiedLinkError) {
+        throw IllegalStateException("AURA native inference library is not available in this APK.", error)
+    }
+
     private fun sendMessage() {
         val text = input.text.toString().trim()
         if (!modelReady || text.isEmpty() || text.length > 8000 || !send.isEnabled) return
@@ -706,7 +718,7 @@ class MainActivity : Activity() {
         val prompt = (conversation.takeLast(8).joinToString("\n") { (role, message) -> "$role: $message" } + "\nAURA:").takeLast(6000)
         executor.execute {
             try {
-                val answer = NativeLlama.nativeGenerate(buildSystemPrompt(), prompt, 256).trim()
+                val answer = generateNative(buildSystemPrompt(), prompt, 256).trim()
                 if (answer.isEmpty()) throw IllegalStateException("The model returned an empty response.")
                 conversation.add("AURA" to answer)
                 lastAssistantMessage = answer
