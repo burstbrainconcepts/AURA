@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "start": "node src/server.js",
-    "test": "node --test"
+    "test": "node --test",
+    "migrate": "node src/migrate.js"
   },
   "dependencies": {
     "@aura/core": "0.1.0",
