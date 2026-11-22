@@ -34,7 +34,19 @@ base64 -w 0 aura-command-private.pem
 
 Store the base64 output as `AURA_COMMAND_PRIVATE_KEY_B64` in the server secret manager. Never commit the private key or put it in the Android app.
 
-## Run
+## Run locally with Docker
+
+Copy the example environment file and fill in the private values:
+
+```bash
+cp .env.recovery.example .env
+# Generate a server signing key and account token as described above.
+docker compose --env-file .env -f docker-compose.recovery.yml up -d --build
+```
+
+The Compose stack starts PostgreSQL, applies the migrations, and starts the API. For Railway, add a PostgreSQL service and set `DATABASE_URL`, `AURA_COMMAND_PRIVATE_KEY_B64`, `AURA_BOOTSTRAP_ACCOUNT_ID`, and `AURA_BOOTSTRAP_ACCOUNT_TOKEN` as service variables. The root `Dockerfile` and `railway.json` configure the deployment and health check.
+
+## Run directly with Node
 
 From the repository root:
 
