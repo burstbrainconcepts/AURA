@@ -1,0 +1,40 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.keystore
+*.jks
+*.p12
+*.pem
+*.key
+secrets/
+
+# Build outputs
+.gradle/
+build/
+dist/
+out/
+target/
+node_modules/
+Pods/
+DerivedData/
+*.apk
+*.aab
+*.ipa
+
+# Local models, datasets and caches
+models/
+weights/
+datasets/
+.cache/
+*.gguf
+*.onnx
+*.tflite
+*.safetensors
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
