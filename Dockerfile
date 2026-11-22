@@ -5,6 +5,7 @@ WORKDIR /app
 
 COPY package.json ./
 COPY packages ./packages
+COPY recovery-console ./recovery-console
 
 RUN npm install --omit=dev --ignore-scripts     && npm cache clean --force
 
