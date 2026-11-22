@@ -390,6 +390,7 @@ struct ContentView: View {
     @State private var pendingCommand = ""
     @State private var pendingRevokeID: String?
     @State private var showRevokeAlert = false
+    @State private var pendingClearLocationID: String?
     @State private var memoryDraft = ""
     @State private var selectedTab = 0
     @State private var message = ""
@@ -443,6 +444,18 @@ struct ContentView: View {
             Button("Cancel", role: .cancel) { pendingRevokeID = nil }
         } message: {
             Text("This revokes the device's recovery credentials and cannot be undone from this screen.")
+        }
+        .confirmationDialog("Clear stored location?", isPresented: Binding(
+            get: { pendingClearLocationID != nil },
+            set: { if !$0 { pendingClearLocationID = nil } }
+        ), titleVisibility: .visible) {
+            Button("Clear location", role: .destructive) {
+                if let id = pendingClearLocationID { Task { await recovery.clearLocation(deviceId: id) } }
+                pendingClearLocationID = nil
+            }
+            Button("Cancel", role: .cancel) { pendingClearLocationID = nil }
+        } message: {
+            Text("This permanently clears the last stored coordinates for this device from your AURA recovery service.")
         }
     }
 
@@ -557,7 +570,7 @@ struct ContentView: View {
                         if let lat = device.latitude, let lon = device.longitude {
                             Text("Last consented location: \(lat), \(lon)").font(.caption2).foregroundStyle(.secondary)
                             Button("Clear stored location", role: .destructive) {
-                                Task { await recovery.clearLocation(deviceId: device.id) }
+                                pendingClearLocationID = device.id
                             }.font(.caption)
                         }
                         HStack {
