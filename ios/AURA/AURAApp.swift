@@ -31,7 +31,7 @@ struct ContentView: View {
                     }
                     Spacer()
                     Circle().fill(.green).frame(width: 7, height: 7)
-                    Text("On device").font(.caption2).foregroundStyle(.secondary)
+                    Text("Platform status").font(.caption2).foregroundStyle(.secondary)
                 }.padding(.horizontal, 22).padding(.top, 14).padding(.bottom, 20)
 
                 TabView(selection: $selectedTab) {
@@ -73,20 +73,20 @@ struct ContentView: View {
                     Image(systemName: "arrow.up").font(.headline).foregroundStyle(.white).frame(width: 45, height: 45).background(Color.indigo, in: RoundedRectangle(cornerRadius: 13))
                 }
             }.padding(.bottom, 12)
-            Text("Preview interface · local inference adapter not connected").font(.system(size: 10)).foregroundStyle(.secondary).padding(.bottom, 5)
+            Text("Preview interface · local inference adapter pending").font(.system(size: 10)).foregroundStyle(.secondary).padding(.bottom, 5)
         }.padding(.horizontal, 22)
     }
 
     private var memory: some View {
-        infoPage(icon: "lock.fill", title: "Your memory. Your choice.", detail: "Encrypted, opt-in memory will be connected to the AURA shared memory contract. Nothing is saved by this preview.")
+        infoPage(icon: "lock.fill", title: "Your memory. Your choice.", detail: "AURA's shared encrypted-memory contract will connect through the native secure-storage adapter. Storage, sync and export capabilities will be exposed according to configured permissions and user choices.")
     }
 
     private var guardView: some View {
-        infoPage(icon: "shield.lefthalf.filled", title: "Device protection", detail: "iOS recovery is permission-limited. AURA can provide account security, device check-ins and recovery guidance, but cannot remotely lock or control an iPhone like Android Device Admin.")
+        infoPage(icon: "shield.lefthalf.filled", title: "Device protection", detail: "AURA Guard uses a capability-discovery layer. Available recovery, device-management, check-in and protection features will be determined at runtime from the device, account, configured entitlements and applicable platform agreements.")
     }
 
     private var settings: some View {
-        infoPage(icon: "slider.horizontal.3", title: "AURA settings", detail: "Local model, privacy, voice and recovery-service configuration will be added through native iOS adapters.")
+        infoPage(icon: "slider.horizontal.3", title: "AURA settings", detail: "Configure local models, voice, privacy, connected devices and recovery services. Platform integrations will report which capabilities are available, pending approval or unavailable.")
     }
 
     private func infoPage(icon: String, title: String, detail: String) -> some View {
