@@ -27,7 +27,7 @@ final class AuraMemoryVault: ObservableObject {
     func setEnabled(_ value: Bool) {
         if value {
             do {
-                _ = try encryptionKey()
+                _ = try encryptionKey(createIfMissing: !FileManager.default.fileExists(atPath: vaultURL.path))
                 enabled = true
                 UserDefaults.standard.set(true, forKey: "aura.memory.enabled")
                 load()
@@ -67,7 +67,7 @@ final class AuraMemoryVault: ObservableObject {
         return root.appendingPathComponent("AURA", isDirectory: true).appendingPathComponent("memory.aesgcm")
     }
 
-    private func encryptionKey() throws -> SymmetricKey {
+    private func encryptionKey(createIfMissing: Bool = true) throws -> SymmetricKey {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -82,6 +82,9 @@ final class AuraMemoryVault: ObservableObject {
         }
         guard status == errSecItemNotFound else {
             throw NSError(domain: NSOSStatusErrorDomain, code: Int(status))
+        }
+        guard createIfMissing else {
+            throw NSError(domain: "AURA.Memory", code: 2, userInfo: [NSLocalizedDescriptionKey: "The encryption key is missing. Existing vault data was not changed."])
         }
         let key = SymmetricKey(size: .bits256)
         let data = key.withUnsafeBytes { Data($0) }
@@ -114,7 +117,7 @@ final class AuraMemoryVault: ObservableObject {
         do {
             let combined = try Data(contentsOf: vaultURL)
             let box = try AES.GCM.SealedBox(combined: combined)
-            let plaintext = try AES.GCM.open(box, using: encryptionKey())
+            let plaintext = try AES.GCM.open(box, using: encryptionKey(createIfMissing: false))
             items = try JSONDecoder().decode([AuraMemoryItem].self, from: plaintext)
             status = "Loaded \(items.count) encrypted memory items."
         } catch {
