@@ -7,6 +7,7 @@ import { Pool } from "pg";
 import { createCommandEnvelope, CAPABILITIES, isCommandAllowlisted } from "@aura/core";
 import {
   createDeviceToken,
+  createEnrollmentMessage,
   exportCommandPublicKey,
   loadCommandSigner,
   sha256,
@@ -166,11 +167,10 @@ async function route(req, res) {
       [id, account.id, body.deviceId, sha256(body.publicKeyPem), challenge, expiresAt,
        JSON.stringify(body.capabilities), body.platform, String(body.label || "").slice(0, 80)]
     );
-    const message = JSON.stringify({
-      version: 1, challengeId: id, deviceId: body.deviceId,
-      publicKeySha256: sha256(body.publicKeyPem), capabilities: body.capabilities,
-      platform: body.platform, label: String(body.label || "").slice(0, 80),
-      expiresAt: expiresAt.toISOString(), challenge
+    const message = createEnrollmentMessage({
+      challengeId: id, deviceId: body.deviceId, publicKeySha256: sha256(body.publicKeyPem),
+      capabilities: body.capabilities, platform: body.platform,
+      label: String(body.label || "").slice(0, 80), expiresAt: expiresAt.toISOString(), challenge
     });
     return send(res, 201, { challengeId: id, message, expiresAt: expiresAt.toISOString() });
   }
@@ -198,12 +198,12 @@ async function route(req, res) {
         await client.query("ROLLBACK");
         return send(res, 400, { error: "public_key_changed" });
       }
-      const message = JSON.stringify({
-        version: 1, challengeId: challenge.id, deviceId: challenge.device_id,
+      const message = createEnrollmentMessage({
+        challengeId: challenge.id, deviceId: challenge.device_id,
         publicKeySha256: challenge.public_key_sha256,
-        capabilities: challenge.requested_capabilities,
-        platform: challenge.platform, label: challenge.label,
-        expiresAt: new Date(challenge.expires_at).toISOString(), challenge: challenge.challenge
+        capabilities: challenge.requested_capabilities, platform: challenge.platform,
+        label: challenge.label, expiresAt: new Date(challenge.expires_at).toISOString(),
+        challenge: challenge.challenge
       });
       if (!verifyEnrollmentProof({ publicKeyPem: body.publicKeyPem, message, signature: body.signature })) {
         await client.query("ROLLBACK");
