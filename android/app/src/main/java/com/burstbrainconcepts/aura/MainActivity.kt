@@ -10,6 +10,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.provider.Settings
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
@@ -44,13 +45,18 @@ class MainActivity : Activity() {
     private lateinit var recovery: RemoteRecoveryClient
     private lateinit var recoverySetupButton: Button
     private lateinit var recoveryPollButton: Button
+    private lateinit var locationButton: Button
     private var lastUserMessage = ""
     private var lastAssistantMessage = ""
     private var speakReplies = false
     private var activeDownloadId = -1L
     private var modelReady = false
+    private var pendingLocationSettings = false
 
-    companion object { private const val REQUEST_DEVICE_ADMIN = 7411 }
+    companion object {
+        private const val REQUEST_DEVICE_ADMIN = 7411
+        private const val REQUEST_LOCATION_PERMISSION = 7412
+    }
 
     private val downloadReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -163,8 +169,13 @@ class MainActivity : Activity() {
             isEnabled = false
             setOnClickListener { pollRecoveryNow() }
         }
+        locationButton = Button(this).apply {
+            text = "Location: off"
+            setOnClickListener { showLocationSettings() }
+        }
         recoveryControls.addView(recoverySetupButton, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         recoveryControls.addView(recoveryPollButton, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        recoveryControls.addView(locationButton, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         transcript = TextView(this).apply {
             text = "Welcome to AURA. Download the starter model once; after that, chat can run offline on this device.\n"
             textSize = 16f
@@ -220,6 +231,83 @@ class MainActivity : Activity() {
     }
 
 
+
+    private fun showLocationSettings() {
+        if (!recovery.isEnrolled()) {
+            AlertDialog.Builder(this).setTitle("Link remote recovery first")
+                .setMessage("Connect this device to your AURA Recovery server before enabling location check-ins.")
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Link recovery") { _, _ -> showRecoverySetup() }.show()
+            return
+        }
+        if (recovery.isLocationOptIn()) {
+            AlertDialog.Builder(this).setTitle("Disable recovery location?")
+                .setMessage("AURA will stop sending location check-ins. You can clear the last saved location from the account API.")
+                .setNegativeButton("Keep enabled", null)
+                .setPositiveButton("Disable") { _, _ -> updateLocationConsent(false) }.show()
+            return
+        }
+        AlertDialog.Builder(this).setTitle("Enable lost-device location check-ins?")
+            .setMessage("When enabled, AURA may send this device location to your linked AURA Recovery account during periodic background check-ins. Location is off by default. Android will ask for location permission, including Allow all the time. You can disable this at any time.")
+            .setNegativeButton("Not now", null)
+            .setPositiveButton("Continue") { _, _ -> requestLocationPermissionFlow() }.show()
+    }
+
+    private fun requestLocationPermissionFlow() {
+        val fine = checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val coarse = checkSelfPermission(android.Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        if (!fine && !coarse) {
+            requestPermissions(arrayOf(android.Manifest.permission.ACCESS_FINE_LOCATION, android.Manifest.permission.ACCESS_COARSE_LOCATION), REQUEST_LOCATION_PERMISSION)
+            return
+        }
+        requestBackgroundLocationPermission()
+    }
+
+    private fun requestBackgroundLocationPermission() {
+        if (Build.VERSION.SDK_INT >= 29 && checkSelfPermission(android.Manifest.permission.ACCESS_BACKGROUND_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            AlertDialog.Builder(this).setTitle("Allow location all the time")
+                .setMessage("For lost-device check-ins while AURA is not open, choose Allow all the time on the next Android app-permissions screen. If you choose otherwise, AURA will not send background location.")
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Open app settings") { _, _ ->
+                    pendingLocationSettings = true
+                    val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.fromParts("package", packageName, null))
+                    startActivity(intent)
+                }.show()
+            return
+        }
+        updateLocationConsent(true)
+    }
+
+    private fun updateLocationConsent(enabled: Boolean) {
+        locationButton.isEnabled = false
+        status.text = if (enabled) "Enabling encrypted recovery location..." else "Disabling recovery location..."
+        executor.execute {
+            try {
+                recovery.setLocationOptIn(enabled)
+                recovery.refreshEnrollmentCapabilities()
+                runOnUiThread {
+                    locationButton.text = if (enabled) "Location: on" else "Location: off"
+                    locationButton.isEnabled = true
+                    status.text = if (enabled) "Location check-ins enabled • background permission granted" else "Location check-ins disabled"
+                }
+            } catch (error: Exception) {
+                runOnUiThread {
+                    locationButton.text = if (recovery.isLocationOptIn()) "Location: on" else "Location: off"
+                    locationButton.isEnabled = true
+                    status.text = "Location setting saved locally, but server capability update failed"
+                }
+            }
+        }
+    }
+
+    private fun updateLocationButton() {
+        if (!::locationButton.isInitialized) return
+        locationButton.text = when {
+            !recovery.isLocationOptIn() -> "Location: off"
+            Build.VERSION.SDK_INT >= 29 && checkSelfPermission(android.Manifest.permission.ACCESS_BACKGROUND_LOCATION) != PackageManager.PERMISSION_GRANTED -> "Location: permission needed"
+            else -> "Location: on"
+        }
+    }
 
     private fun showRecoverySetup() {
         if (Build.VERSION.SDK_INT < 33) {
@@ -356,6 +444,17 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         if (::protectionButton.isInitialized) updateDeviceAdminControls()
+        if (::locationButton.isInitialized) {
+            if (pendingLocationSettings) {
+                pendingLocationSettings = false
+                if (Build.VERSION.SDK_INT < 29 || checkSelfPermission(android.Manifest.permission.ACCESS_BACKGROUND_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+                    updateLocationConsent(true)
+                } else {
+                    status.text = "Background location was not enabled. Location recovery remains off."
+                }
+            }
+            updateLocationButton()
+        }
     }
 
     @Deprecated("Use Activity Result API")
@@ -614,6 +713,10 @@ class MainActivity : Activity() {
             } else {
                 status.text = "Microphone permission was not granted."
             }
+        } else if (requestCode == REQUEST_LOCATION_PERMISSION) {
+            val granted = grantResults.any { it == PackageManager.PERMISSION_GRANTED }
+            if (granted) requestBackgroundLocationPermission()
+            else status.text = "Location permission was not granted. Recovery location remains off."
         }
     }
 
