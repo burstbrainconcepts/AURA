@@ -1,0 +1,13 @@
+{
+  "name": "aura-platform",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AURA local-first assistant and device protection platform",
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "test": "npm run test --workspace @aura/core"
+  }
+}
