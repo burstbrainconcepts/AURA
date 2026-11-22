@@ -59,6 +59,10 @@ npm run start --workspace @aura/recovery-server
 
 The service must be exposed through HTTPS (for example, behind Caddy or another TLS reverse proxy). Do not expose the raw HTTP listener directly to the public internet.
 
+## Account console
+
+After deploying the API, open `https://your-recovery-host/console`. Enter the bootstrap account token to view enrolled devices, inspect the last consented location, request a confirmed screen lock, revoke a device, or clear stored location. The browser keeps the token only in page memory; disconnect or close the page to clear it.
+
 ## API
 
 - `GET /health`
