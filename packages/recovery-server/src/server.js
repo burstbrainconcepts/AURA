@@ -137,11 +137,17 @@ async function route(req, res) {
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
     await pool.query(
       `INSERT INTO aura_enrollment_challenges
-       (id, account_id, device_id, public_key_sha256, challenge, expires_at)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [id, account.id, body.deviceId, sha256(body.publicKeyPem), challenge, expiresAt]
+       (id, account_id, device_id, public_key_sha256, challenge, expires_at, requested_capabilities, platform, label)
+       VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9)`,
+      [id, account.id, body.deviceId, sha256(body.publicKeyPem), challenge, expiresAt,
+       JSON.stringify(body.capabilities), body.platform, String(body.label || "").slice(0, 80)]
     );
-    const message = `AURA-ENROLL:v1:${id}:${body.deviceId}:${expiresAt.toISOString()}:${challenge}`;
+    const message = JSON.stringify({
+      version: 1, challengeId: id, deviceId: body.deviceId,
+      publicKeySha256: sha256(body.publicKeyPem), capabilities: body.capabilities,
+      platform: body.platform, label: String(body.label || "").slice(0, 80),
+      expiresAt: expiresAt.toISOString(), challenge
+    });
     return send(res, 201, { challengeId: id, message, expiresAt: expiresAt.toISOString() });
   }
 
@@ -168,13 +174,23 @@ async function route(req, res) {
         await client.query("ROLLBACK");
         return send(res, 400, { error: "public_key_changed" });
       }
-      const message = `AURA-ENROLL:v1:${challenge.id}:${challenge.device_id}:${new Date(challenge.expires_at).toISOString()}:${challenge.challenge}`;
+      const message = JSON.stringify({
+        version: 1, challengeId: challenge.id, deviceId: challenge.device_id,
+        publicKeySha256: challenge.public_key_sha256,
+        capabilities: challenge.requested_capabilities,
+        platform: challenge.platform, label: challenge.label,
+        expiresAt: new Date(challenge.expires_at).toISOString(), challenge: challenge.challenge
+      });
       if (!verifyEnrollmentProof({ publicKeyPem: body.publicKeyPem, message, signature: body.signature })) {
         await client.query("ROLLBACK");
         return send(res, 401, { error: "enrollment_proof_invalid" });
       }
       const token = createDeviceToken();
-      const capabilities = Array.isArray(body.capabilities) ? body.capabilities : [];
+      const capabilities = challenge.requested_capabilities;
+      if (!Array.isArray(capabilities) || capabilities.some(value => !CAPABILITIES.includes(value))) {
+        await client.query("ROLLBACK");
+        return send(res, 400, { error: "enrollment_capabilities_invalid" });
+      }
       const original = await client.query(
         "SELECT capabilities FROM aura_devices WHERE id = $1 AND account_id = $2",
         [challenge.device_id, account.id]
@@ -184,20 +200,20 @@ async function route(req, res) {
           `UPDATE aura_devices SET public_key_pem = $1, token_sha256 = $2, capabilities = $3::jsonb,
            platform = $4, label = $5, revoked_at = NULL, last_seen_at = NOW()
            WHERE id = $6 AND account_id = $7`,
-          [body.publicKeyPem, sha256(token), JSON.stringify(capabilities), body.platform || "android",
-           String(body.label || "").slice(0, 80), challenge.device_id, account.id]
+          [body.publicKeyPem, sha256(token), JSON.stringify(capabilities), challenge.platform,
+           challenge.label, challenge.device_id, account.id]
         );
       } else {
         await client.query(
           `INSERT INTO aura_devices (id, account_id, public_key_pem, token_sha256, capabilities, platform, label, last_seen_at)
            VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, NOW())`,
           [challenge.device_id, account.id, body.publicKeyPem, sha256(token), JSON.stringify(capabilities),
-           body.platform || "android", String(body.label || "").slice(0, 80)]
+           challenge.platform, challenge.label]
         );
       }
       await client.query("UPDATE aura_enrollment_challenges SET consumed_at = NOW() WHERE id = $1", [challenge.id]);
       await client.query("COMMIT");
-      await audit(account.id, challenge.device_id, "device.enrolled", { platform: body.platform || "android" });
+      await audit(account.id, challenge.device_id, "device.enrolled", { platform: challenge.platform, capabilities });
       return send(res, 201, {
         deviceId: challenge.device_id,
         deviceToken: token,
