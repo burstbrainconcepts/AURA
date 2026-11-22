@@ -6,6 +6,8 @@ const DEFAULT_ENDPOINT = "http://127.0.0.1:8080";
 let endpoint = localStorage.getItem("aura.inference.endpoint") || DEFAULT_ENDPOINT;
 let history = [];
 let busy = false;
+let voiceOutputEnabled = localStorage.getItem("aura.voice.output.enabled") === "true";
+let voiceStatus = "Local voice output is off.";
 let memoryUnlocked = false;
 let memoryPassphrase = "";
 let memoryItems = [];
@@ -90,6 +92,7 @@ async function sendMessage(value) {
     pending.remove();
     history.push({ role: "assistant", content: answer });
     appendMessage("assistant", answer);
+    speakReply(answer);
     setStatus(true);
   } catch (error) {
     pending.remove();
@@ -233,6 +236,27 @@ async function renderMemoryPanel() {
 }
 
 
+
+function speakReply(text) {
+  if (!voiceOutputEnabled) return;
+  if (!("speechSynthesis" in window) || typeof SpeechSynthesisUtterance === "undefined") {
+    voiceStatus = "Local text-to-speech is unavailable in this desktop WebView.";
+    return;
+  }
+  const voices = window.speechSynthesis.getVoices();
+  const localVoice = voices.find((voice) => voice.localService);
+  if (!localVoice) {
+    voiceStatus = "No local system voice is currently available. AURA did not use an online voice service.";
+    return;
+  }
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.voice = localVoice;
+  utterance.onstart = () => { voiceStatus = "Speaking with a local system voice."; };
+  utterance.onerror = () => { voiceStatus = "Local voice output stopped."; };
+  window.speechSynthesis.speak(utterance);
+}
+
 function renderGuardPanel(status = "Connect to the deployed AURA Recovery API.") {
   panel.innerHTML = `
     <div class="panel-head"><div><h3>AURA Guard</h3><p class="muted">Manage enrolled devices through your authenticated recovery service.</p></div><span class="tag">${recoveryToken ? "Connected session" : "Not connected"}</span></div>
@@ -359,8 +383,20 @@ function showPanel(view) {
         <input id="endpoint" spellcheck="false" autocomplete="url" />
         <div class="settings-actions"><button type="submit">Save endpoint</button><button type="button" id="test-endpoint" class="secondary">Test connection</button></div>
         <p class="hint" id="settings-result">For security, the desktop native bridge currently accepts localhost endpoints only.</p>
+        <label class="voice-toggle"><input id="voice-output" type="checkbox" /> Speak replies using a local system voice</label>
+        <p class="hint" id="voice-status"></p>
       </form>`;
     document.querySelector("#endpoint").value = endpoint;
+    const voiceToggle = document.querySelector("#voice-output");
+    voiceToggle.checked = voiceOutputEnabled;
+    document.querySelector("#voice-status").textContent = voiceStatus;
+    voiceToggle.addEventListener("change", () => {
+      voiceOutputEnabled = voiceToggle.checked;
+      localStorage.setItem("aura.voice.output.enabled", String(voiceOutputEnabled));
+      if (!voiceOutputEnabled && "speechSynthesis" in window) window.speechSynthesis.cancel();
+      voiceStatus = voiceOutputEnabled ? "AURA will use an available local system voice only." : "Local voice output is off.";
+      document.querySelector("#voice-status").textContent = voiceStatus;
+    });
     document.querySelector("#settings-form").addEventListener("submit", async (event) => {
       event.preventDefault();
       const next = document.querySelector("#endpoint").value.trim();
