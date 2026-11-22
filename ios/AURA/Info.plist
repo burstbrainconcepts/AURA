@@ -25,7 +25,7 @@
   <key>NSMicrophoneUsageDescription</key>
   <string>AURA uses the microphone when you explicitly start voice input.</string>
   <key>NSSpeechRecognitionUsageDescription</key>
-  <string>AURA uses speech recognition to transcribe voice input. It requests on-device recognition when available.</string>
+  <string>AURA uses on-device speech recognition when supported to transcribe voice input.</string>
   <key>NSLocalNetworkUsageDescription</key>
   <string>AURA connects to your own computer or local device running the on-device AI inference service.</string>
   <key>NSAppTransportSecurity</key>
