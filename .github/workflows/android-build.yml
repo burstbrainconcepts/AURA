@@ -33,6 +33,7 @@ jobs:
       - name: Fetch pinned llama.cpp source
         run: |
           mkdir -p upstream/engines
+          rm -rf upstream/engines/llama.cpp
           git clone --filter=blob:none --no-checkout https://github.com/ggml-org/llama.cpp.git upstream/engines/llama.cpp
           git -C upstream/engines/llama.cpp fetch --depth 1 origin 94f3af3d09e74a0fb35f703194318d3b4037714a
           git -C upstream/engines/llama.cpp checkout --detach 94f3af3d09e74a0fb35f703194318d3b4037714a
