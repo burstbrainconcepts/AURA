@@ -40,8 +40,6 @@ app.innerHTML = `
 const heading = document.querySelector("#heading");
 const panel = document.querySelector("#panel");
 const welcome = document.querySelector("#welcome");
-const statusEl = document.querySelector("#engine-status");
-const tagEl = document.querySelector("#runtime-tag");
 const labels = { assistant: "Your assistant", memory: "Private memory", guard: "Device Guard", settings: "Settings" };
 
 function setStatus(online, detail = "") {
@@ -97,10 +95,11 @@ async function sendMessage(value) {
 }
 function showAssistant() {
   panel.innerHTML = `
-    <div class="panel-head"><div><h3>Start a conversation</h3><p class="muted">Your prompts are sent to your configured local llama.cpp server.</p></div><span class="tag" id="runtime-tag">${tagEl.textContent}</span></div>
+    <div class="panel-head"><div><h3>Start a conversation</h3><p class="muted">Your prompts are sent to your configured local llama.cpp server.</p></div><span class="tag" id="runtime-tag">Not connected</span></div>
     <div class="messages" id="messages"><p class="empty">Your conversation will appear here.</p></div>
     <form id="composer"><input id="prompt" autocomplete="off" placeholder="Ask AURA anything..." aria-label="Message AURA" /><button type="submit" id="send">Send <span>↗</span></button></form>
-    <p class="hint">Local endpoint: ${endpoint}</p>`;
+    <p class="hint" id="endpoint-hint">Local endpoint configured</p>`;
+  document.querySelector("#endpoint-hint").textContent = "Local endpoint: " + endpoint;
   const input = document.querySelector("#prompt");
   document.querySelector("#composer").addEventListener("submit", (event) => {
     event.preventDefault();
