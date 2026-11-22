@@ -2,19 +2,26 @@
 
 Native SwiftUI application target for iPhone and iPad.
 
-## Product approach
+## Implemented in this target
 
-AURA does not hard-code a permanent list of operating-system restrictions into its product architecture. Platform capabilities are discovered and evaluated at runtime through native adapters. The implementation and release process will verify current OS versions, device classes, account types, developer-program terms, entitlements, managed-device options, contractual agreements and approvals that apply at that time.
+- Local assistant chat through the OpenAI-compatible llama.cpp HTTP API.
+- Configurable local inference URL and optional API key. The key remains in app memory and is not saved in preferences.
+- Opt-in encrypted memory using AES-GCM. The encryption key is stored in the iOS Keychain with device-only accessibility; encrypted memory data is stored with complete file protection. Memory is manually saved, reviewable, deletable and can be disabled.
+- AURA Guard controller for listing registered devices, queuing explicitly confirmed lock and location-refresh commands, clearing a stored location and revoking device credentials. The account API token is stored in the Keychain after a successful connection.
+- Capability-first platform design: approval-dependent features remain in the roadmap and are evaluated against the current device, account, entitlements and agreements.
 
-Where a capability requires an entitlement, agreement, managed deployment, partner arrangement or platform-team approval, track it as an integration dependency and pursue the applicable process. Do not silently remove the product capability from the roadmap. If a platform does not grant it in a particular deployment context, report that state accurately and provide the best supported alternative.
+## Connect local AI
 
-## Current state
+See [Local inference setup](../docs/LOCAL-INFERENCE-SETUP.md). A computer-hosted llama.cpp server must be reachable from the iPhone on a trusted local network. Use API-key authentication when exposing the server to other devices on that network.
 
-- Native SwiftUI application shell with Assistant, Memory, Guard and Settings tabs.
-- Preview UI does not yet connect to the shared inference, encrypted-memory or recovery services.
-- Native adapters and a capability registry are planned for model runtime, secure storage, voice, background execution, device management and recovery.
-- Capability states should distinguish available, approval-required, configured, unavailable and temporarily unavailable.
+## Connect AURA Guard
+
+Deploy the recovery API with PostgreSQL and HTTPS as described in [the recovery server guide](../packages/recovery-server/README.md). In the Guard tab, enter the service URL and account bootstrap token. The app stores the token in the Keychain after it successfully lists devices.
+
+Remote commands are signed and expiring. Lock and location-refresh requests require a confirmation in the app and the target device must be enrolled with the matching capability and online to receive the command. Revocation also requires confirmation. A queued command is not proof that the target device executed it.
+
+The current iOS Guard target is an account controller for other enrolled devices. Native enrollment of the iPhone itself, device-specific recovery execution and additional platform management integrations remain future work.
 
 ## Build
 
-Open `AURA.xcodeproj` in Xcode on macOS and build the `AURA` scheme for an iOS Simulator. A signed device build requires the applicable Apple developer account, signing configuration and provisioning profile.
+Open `AURA.xcodeproj` in Xcode on macOS and build the `AURA` scheme for an iOS Simulator. The GitHub Actions workflow produces an unsigned Simulator app artifact. A signed physical-device build and distribution require the applicable signing configuration and provisioning.
