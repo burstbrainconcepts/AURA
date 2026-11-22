@@ -28,6 +28,7 @@ private struct LocalChatResponse: Decodable {
 final class AuraAssistantModel: ObservableObject {
     @Published var messages: [AuraChatMessage] = []
     @Published var isBusy = false
+    @Published var apiKey = ""
     @Published var engineOnline = false
     @Published var status = "Checking local model…"
     @Published var endpoint: String {
@@ -78,6 +79,7 @@ final class AuraAssistantModel: ObservableObject {
             request.httpMethod = "POST"
             request.timeoutInterval = 120
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            if !apiKey.isEmpty { request.setValue("Bearer \\(apiKey)", forHTTPHeaderField: "Authorization") }
             let body = LocalChatRequest(model: "local-model", messages: messages, temperature: 0.7, max_tokens: 512, stream: false)
             request.httpBody = try JSONEncoder().encode(body)
             let (data, response) = try await URLSession.shared.data(for: request)
@@ -212,11 +214,14 @@ struct ContentView: View {
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .keyboardType(.URL)
+                SecureField("Optional local model API key", text: $assistant.apiKey)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
                 Button("Test local connection") { Task { await assistant.checkHealth() } }
                 Text(assistant.status).font(.caption).foregroundStyle(.secondary)
             }
             Section("Privacy") {
-                Text("Chat requests are sent to the local inference URL configured above. For a computer-hosted model, use its reachable local-network address and configure the inference server to accept connections from your phone.")
+                Text("Chat requests are sent to the local inference URL configured above. For a computer-hosted model, use its reachable local-network address and configure the inference server to accept connections from your phone. If you enable server API-key authentication, enter the key above; it is kept in memory only and is not written to app preferences.")
                 Text("Encrypted memory and recovery-service connection will be enabled after their native adapters are integrated.")
             }
         }.scrollContentBackground(.hidden)
