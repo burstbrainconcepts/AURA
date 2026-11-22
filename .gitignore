@@ -38,3 +38,8 @@ Thumbs.db
 .idea/
 .vscode/
 *.swp
+
+# Generated desktop platform icons
+desktop/src-tauri/icons/*.png
+desktop/src-tauri/icons/*.icns
+desktop/src-tauri/icons/*.ico
