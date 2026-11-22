@@ -2,6 +2,7 @@
 #include <android/log.h>
 #include <llama.h>
 #include <algorithm>
+#include <cstdint>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -33,11 +34,65 @@ void throw_java(JNIEnv * env, const char * message) {
 
 std::string jstring_to_string(JNIEnv * env, jstring value) {
     if (!value) return {};
-    const char * chars = env->GetStringUTFChars(value, nullptr);
+    const jsize length = env->GetStringLength(value);
+    const jchar * chars = env->GetStringChars(value, nullptr);
     if (!chars) return {};
-    std::string result(chars);
-    env->ReleaseStringUTFChars(value, chars);
+    std::string result;
+    result.reserve(static_cast<size_t>(length) * 3);
+    for (jsize i = 0; i < length; ++i) {
+        uint32_t cp = chars[i];
+        if (cp >= 0xD800 && cp <= 0xDBFF && i + 1 < length) {
+            const uint32_t low = chars[i + 1];
+            if (low >= 0xDC00 && low <= 0xDFFF) {
+                cp = 0x10000 + ((cp - 0xD800) << 10) + (low - 0xDC00);
+                ++i;
+            }
+        }
+        if (cp <= 0x7F) result.push_back(static_cast<char>(cp));
+        else if (cp <= 0x7FF) {
+            result.push_back(static_cast<char>(0xC0 | (cp >> 6)));
+            result.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+        } else if (cp <= 0xFFFF) {
+            result.push_back(static_cast<char>(0xE0 | (cp >> 12)));
+            result.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
+            result.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+        } else {
+            result.push_back(static_cast<char>(0xF0 | (cp >> 18)));
+            result.push_back(static_cast<char>(0x80 | ((cp >> 12) & 0x3F)));
+            result.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
+            result.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+        }
+    }
+    env->ReleaseStringChars(value, chars);
     return result;
+}
+
+jstring utf8_to_jstring(JNIEnv * env, const std::string & value) {
+    std::vector<jchar> utf16;
+    utf16.reserve(value.size());
+    for (size_t i = 0; i < value.size();) {
+        const uint8_t first = static_cast<uint8_t>(value[i++]);
+        uint32_t cp = 0xFFFD;
+        size_t continuation = 0;
+        if (first < 0x80) { cp = first; continuation = 0; }
+        else if ((first & 0xE0) == 0xC0) { cp = first & 0x1F; continuation = 1; }
+        else if ((first & 0xF0) == 0xE0) { cp = first & 0x0F; continuation = 2; }
+        else if ((first & 0xF8) == 0xF0) { cp = first & 0x07; continuation = 3; }
+        bool valid = i + continuation <= value.size();
+        for (size_t j = 0; valid && j < continuation; ++j) {
+            const uint8_t next = static_cast<uint8_t>(value[i++]);
+            if ((next & 0xC0) != 0x80) { valid = false; break; }
+            cp = (cp << 6) | (next & 0x3F);
+        }
+        if (!valid || cp > 0x10FFFF || (cp >= 0xD800 && cp <= 0xDFFF)) cp = 0xFFFD;
+        if (cp <= 0xFFFF) utf16.push_back(static_cast<jchar>(cp));
+        else {
+            cp -= 0x10000;
+            utf16.push_back(static_cast<jchar>(0xD800 + (cp >> 10)));
+            utf16.push_back(static_cast<jchar>(0xDC00 + (cp & 0x3FF)));
+        }
+    }
+    return env->NewString(utf16.data(), static_cast<jsize>(utf16.size()));
 }
 }
 
@@ -192,7 +247,7 @@ Java_com_burstbrainconcepts_aura_NativeLlama_nativeGenerate(
 
     llama_sampler_free(sampler);
     llama_batch_ext_free(batch);
-    return env->NewStringUTF(output.c_str());
+    return utf8_to_jstring(env, output);
 }
 
 extern "C" JNIEXPORT void JNICALL
