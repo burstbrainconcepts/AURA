@@ -41,6 +41,8 @@ jobs:
         uses: android-actions/setup-android@v3
       - name: Install Android NDK and CMake
         run: sdkmanager "ndk;27.2.12479018" "cmake;3.22.1"
+      - name: Verify pinned llama.cpp checkout
+        run: test -f upstream/engines/llama.cpp/include/llama.h && git -C upstream/engines/llama.cpp rev-parse HEAD
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
