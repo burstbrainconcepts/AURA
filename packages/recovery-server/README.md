@@ -39,7 +39,7 @@ Store the base64 output as `AURA_COMMAND_PRIVATE_KEY_B64` in the server secret m
 Copy the example environment file and fill in the private values:
 
 ```bash
-cp .env.recovery.example .env
+cp .env.example .env
 # Generate a server signing key and account token as described above.
 docker compose --env-file .env -f docker-compose.recovery.yml up -d --build
 ```
