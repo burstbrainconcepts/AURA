@@ -54,6 +54,7 @@ final class AuraAssistantModel: ObservableObject {
             let url = try makeURL("/health")
             var request = URLRequest(url: url)
             request.httpMethod = "GET"
+            if !apiKey.isEmpty { request.setValue("Bearer \\(apiKey)", forHTTPHeaderField: "Authorization") }
             request.timeoutInterval = 5
             let (_, response) = try await URLSession.shared.data(for: request)
             guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
