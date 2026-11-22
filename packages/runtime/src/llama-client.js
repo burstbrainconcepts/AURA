@@ -27,7 +27,8 @@ export class LlamaCppClient {
       if (init.body) headers.set("content-type", "application/json");
       if (this.apiKey) headers.set("authorization", `Bearer ${this.apiKey}`);
       const response = await this.fetch(`${this.baseUrl}${path}`, {
-        ...init, headers, signal: controller.signal
+        ...init, headers,
+        signal: init.signal ? AbortSignal.any([controller.signal, init.signal]) : controller.signal
       });
       if (!response.ok) {
         const detail = (await response.text()).slice(0, 500);
