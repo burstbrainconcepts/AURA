@@ -377,7 +377,7 @@ final class AuraSpeechOutput: ObservableObject {
         utterance.rate = AVSpeechUtteranceDefaultSpeechRate
         synthesizer.speak(utterance)
     }
-    func stop() {
+    func stopSpeakingImmediately() {
         synthesizer.stopSpeaking(at: .immediate)
     }
 }
@@ -806,7 +806,7 @@ struct ContentView: View {
             ]
             if sleepCommands.contains(command) {
                 assistant.clearConversation()
-                speechOutput.stop()
+                speechOutput.stopSpeakingImmediately()
                 return
             }
             let savedItems = memoryVault.enabled ? memoryVault.items : []
