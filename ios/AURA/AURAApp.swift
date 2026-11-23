@@ -740,25 +740,7 @@ struct ContentView: View {
             if phase != .active && speech.isRecording { speech.stop() }
         }
         .onChange(of: speech.transcript) { value in
-            guard !value.isEmpty else { return }
-            message = value
-            speechSilenceTask?.cancel()
-            speechSilenceTask = Task { @MainActor in
-                try? await Task.sleep(nanoseconds: 1_700_000_000)
-                guard !Task.isCancelled else { return }
-                if speech.isRecording { speech.stop() }
-                let spoken = speech.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
-                message = ""
-                if spoken.isEmpty { return }
-                let command = spoken.lowercased()
-                if ["end conversation", "close conversation", "go to sleep", "stop conversation", "goodbye aura"].contains(command) {
-                    assistant.clearConversation()
-                    speechOutput.stop()
-                    return
-                }
-                let savedItems: [AuraMemoryItem] = memoryVault.enabled ? memoryVault.items : []
-                await assistant.send(spoken, savedMemory: savedItems)
-            }
+            handleTranscriptChange(value)
         }
         .onChange(of: assistant.lastAnswer) { value in
             if voiceOutputEnabled && !value.isEmpty { speechOutput.speak(value) }
@@ -796,6 +778,36 @@ struct ContentView: View {
             Button("Cancel", role: .cancel) { pendingClearLocationID = nil }
         } message: {
             Text("This permanently clears the last stored coordinates for this device from your AURA recovery service.")
+        }
+    }
+
+    private func handleTranscriptChange(_ value: String) {
+        guard !value.isEmpty else { return }
+        message = value
+        speechSilenceTask?.cancel()
+        speechSilenceTask = Task { @MainActor in
+            do {
+                try await Task.sleep(nanoseconds: 1_700_000_000)
+            } catch {
+                return
+            }
+            guard !Task.isCancelled else { return }
+            if speech.isRecording { speech.stop() }
+            let spoken = speech.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+            message = ""
+            guard !spoken.isEmpty else { return }
+            let command = spoken.lowercased()
+            let sleepCommands: Set<String> = [
+                "end conversation", "close conversation", "go to sleep",
+                "stop conversation", "goodbye aura"
+            ]
+            if sleepCommands.contains(command) {
+                assistant.clearConversation()
+                speechOutput.stop()
+                return
+            }
+            let savedItems = memoryVault.enabled ? memoryVault.items : []
+            await assistant.send(spoken, savedMemory: savedItems)
         }
     }
 
