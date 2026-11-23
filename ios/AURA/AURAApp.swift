@@ -377,6 +377,9 @@ final class AuraSpeechOutput: ObservableObject {
         utterance.rate = AVSpeechUtteranceDefaultSpeechRate
         synthesizer.speak(utterance)
     }
+    func stop() {
+        synthesizer.stopSpeaking(at: .immediate)
+    }
 }
 
 @main
