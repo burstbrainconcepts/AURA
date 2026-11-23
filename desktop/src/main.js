@@ -43,6 +43,8 @@ app.innerHTML = `
       <nav aria-label="Main navigation">
         <button class="nav active" data-view="assistant">◈ <span>Assistant</span></button>
         <button class="nav" data-view="memory">▤ <span>Memory</span></button>
+        <button class="nav" data-view="voice">◉ <span>Voice</span></button>
+        <button class="nav" data-view="create">✧ <span>Create</span></button>
         <button class="nav" data-view="downloads">⇩ <span>Downloads</span></button>
         <button class="nav" data-view="notifications">♧ <span>Notifications</span></button>
         <button class="nav" data-view="guard">⬡ <span>Device Guard</span></button>
@@ -71,7 +73,7 @@ app.innerHTML = `
 const heading = document.querySelector("#heading");
 const panel = document.querySelector("#panel");
 const welcome = document.querySelector("#welcome");
-const labels = { assistant: "Your assistant", memory: "Private memory", downloads: "Downloads & updates", notifications: "Notifications", guard: "Device Guard", settings: "Settings" };
+const labels = { assistant: "Your assistant", voice: "AURA Voice", create: "Create with AURA", memory: "Private memory", downloads: "Downloads & updates", notifications: "Notifications", guard: "Device Guard", settings: "Settings" };
 
 function setStatus(online, detail = "") {
   document.querySelector("#engine-status").innerHTML = online ? "<i></i> Local engine connected" : "<i></i> Local engine offline";
@@ -615,6 +617,51 @@ async function runRecoveryAction(action, successMessage) {
 }
 
 function showPanel(view) {
+  if (view === "voice") {
+    panel.innerHTML = `
+      <div class="voice-workspace">
+        <div class="panel-head"><div><h3>AURA Voice</h3><p class="muted">Local speech recognition through your configured whisper.cpp service.</p></div><span class="tag">On-device pipeline</span></div>
+        <div class="voice-orb" id="voice-orb"><span>✦</span></div>
+        <h2 id="voice-state">Ready when you are</h2>
+        <p class="muted" id="voice-state-detail">Tap the microphone to start. AURA stops after a pause in speech.</p>
+        <div class="settings-actions voice-actions"><button type="button" id="voice-start">Start listening</button><button type="button" id="voice-stop" class="secondary">Stop</button></div>
+        <p class="hint" id="voice-status"></p>
+        <p class="hint">Wake phrase listening is not enabled in this desktop build. Use the microphone control to start a private recording.</p>
+      </div>`;
+    const start = document.querySelector("#voice-start");
+    const stop = document.querySelector("#voice-stop");
+    start.addEventListener("click", async () => {
+      await toggleVoiceRecording();
+      document.querySelector("#voice-state").textContent = voiceRecording ? "I'm listening…" : "Preparing voice input";
+      document.querySelector("#voice-orb").classList.toggle("listening", voiceRecording);
+    });
+    stop.addEventListener("click", async () => {
+      if (voiceRecording) await finishVoiceRecording(false);
+      document.querySelector("#voice-state").textContent = "Ready when you are";
+      document.querySelector("#voice-orb").classList.remove("listening");
+    });
+    document.querySelector("#voice-status").textContent = voiceInputStatus;
+    return;
+  }
+  if (view === "create") {
+    panel.innerHTML = `
+      <div class="panel-head"><div><h3>Choose a creative workspace</h3><p class="muted">Start with a task and continue in your private assistant chat.</p></div><span class="tag">AURA tools</span></div>
+      <div class="tool-grid">
+        <button class="tool-card" data-prompt="Help me write and edit:"><span>✎</span><strong>Write & edit</strong><small>Draft, rewrite and polish content</small></button>
+        <button class="tool-card" data-prompt="Summarize this:"><span>▤</span><strong>Summarize</strong><small>Extract key points and actions</small></button>
+        <button class="tool-card" data-prompt="Translate this text:"><span>文</span><strong>Translate</strong><small>Translate and explain language</small></button>
+        <button class="tool-card" data-prompt="Help me write or debug code:"><span>⌘</span><strong>Code assistant</strong><small>Review, explain and debug code</small></button>
+        <button class="tool-card" data-prompt="Brainstorm ideas for:"><span>✧</span><strong>Brainstorm</strong><small>Explore ideas and approaches</small></button>
+        <button class="tool-card" data-prompt="Help me plan this project:"><span>◷</span><strong>Project planner</strong><small>Break work into milestones</small></button>
+      </div>`;
+    panel.querySelectorAll(".tool-card").forEach((button) => button.addEventListener("click", () => {
+      const prompt = button.dataset.prompt;
+      document.querySelector('.nav[data-view="assistant"]').click();
+      const input = document.querySelector("#prompt");
+      if (input) { input.value = prompt + " "; input.focus(); }
+    }));
+    return;
+  }
   if (view === "downloads") {
     panel.innerHTML = `
       <div class="panel-head"><div><h3>AI models & updates</h3><p class="muted">Manage the local model runtime used by AURA on this computer.</p></div><span class="tag">Local runtime</span></div>
