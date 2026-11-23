@@ -21,7 +21,7 @@ AURA is a native Kotlin Android app with a CPU-first llama.cpp JNI runtime.
 
 The recovery service is in `packages/recovery-server`. Deploy it behind HTTPS, provision its PostgreSQL database, run migrations, and configure the server signing key and account token. In AURA, select **Link remote recovery**, enter the HTTPS endpoint and account token, and complete enrollment.
 
-The current Android remote-recovery client requires Android 13+ for the platform Ed25519 provider. Background polling is best-effort and can be delayed by Android battery and background-execution policies.
+The Android recovery adapter checks the active security providers for Ed25519 key generation, signing and verification at runtime; it does not use a fixed Android-version cutoff as its capability verdict. If the provider is unavailable in a particular device configuration, AURA reports that capability as unavailable there while preserving the integration path for an approved provider or platform configuration. Background polling is best-effort and can be delayed by device battery and background-execution policies.
 
 ## Known runtime boundaries
 
