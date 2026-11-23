@@ -139,8 +139,8 @@ class AuraWakeWordService : Service(), RecognitionListener {
         val candidates = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION).orEmpty()
         val phrase = candidates.firstOrNull { normalise(it).contains("hey aura") || normalise(it).startsWith("aura ") || normalise(it) == "aura" }
         if (phrase != null) {
-            val cleaned = phrase.replace(Regex("(?i)^.*?hey\\s+aura[, ]*"), "", 1)
-                .replace(Regex("(?i)^aura[, ]*"), "")
+            val cleaned = Regex("(?i)^.*?hey\\s+aura[, ]*").replace(phrase, "", 1)
+                .let { Regex("(?i)^aura[, ]*").replace(it, "") }
                 .trim()
             val launch = Intent(this, MainActivity::class.java).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
