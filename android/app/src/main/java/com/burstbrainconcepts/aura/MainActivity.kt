@@ -53,7 +53,8 @@ class MainActivity : Activity() {
     private var showPage: (String) -> Unit = {}
     private var lastUserMessage = ""
     private var lastAssistantMessage = ""
-    private var speakReplies = false
+    private var speakReplies = true
+    private var pendingHandsFreeListen = false
     @Volatile private var pauseRequested = false
     @Volatile private var downloadInProgress = false
     private var downloadPaused = false
@@ -61,6 +62,7 @@ class MainActivity : Activity() {
     private var pendingLocationSettings = false
 
     companion object {
+        const val EXTRA_START_LISTENING = "com.burstbrainconcepts.aura.extra.START_LISTENING"
         private const val REQUEST_DEVICE_ADMIN = 7411
         private const val REQUEST_LOCATION_PERMISSION = 7412
     }
@@ -75,10 +77,12 @@ class MainActivity : Activity() {
         buildInterface()
         voice = OfflineVoiceController(
             this,
-            { spoken -> runOnUiThread { input.setText(spoken) } },
+            { spoken -> runOnUiThread { input.setText(spoken); if (spoken.isNotBlank()) sendMessage() } },
             { message -> runOnUiThread { status.text = message } }
         )
         voice.initialize()
+        speakToggle.text = "Voice replies: on"
+        if (intent?.getBooleanExtra(EXTRA_START_LISTENING, false) == true) pendingHandsFreeListen = true
         try {
             if (recovery.isEnrolled()) {
                 RecoveryWorkScheduler.ensureScheduled(this)
@@ -414,6 +418,23 @@ class MainActivity : Activity() {
         showSelectedPage("Home")
         updateDeviceAdminControls()
         updateLocationButton()
+    }
+
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (intent.getBooleanExtra(EXTRA_START_LISTENING, false)) {
+            pendingHandsFreeListen = true
+            if (modelReady) startHandsFreeListening()
+            else status.text = "AURA is preparing its local model before listening."
+        }
+    }
+
+    private fun startHandsFreeListening() {
+        if (!pendingHandsFreeListen) return
+        pendingHandsFreeListen = false
+        window.decorView.postDelayed({ voice.startListening() }, 350)
     }
 
     private fun toggleFloatingAssistant() {
@@ -947,6 +968,7 @@ class MainActivity : Activity() {
                 downloadProgress.visibility = ViewGroup.GONE
                 pauseDownload.visibility = ViewGroup.GONE
                 status.text = "OFFLINE AI READY • Qwen 0.5B • CPU mode"
+                startHandsFreeListening()
                 download.text = "Model installed ✓"
                 download.isEnabled = false
                 input.isEnabled = true
@@ -999,6 +1021,7 @@ class MainActivity : Activity() {
                     downloadProgress.visibility = ViewGroup.GONE
                     download.text = "Model installed ✓"
                     status.text = "OFFLINE AI READY • Qwen 0.5B • CPU mode"
+                    startHandsFreeListening()
                     input.isEnabled = true
                     send.isEnabled = true
                     mic.isEnabled = voice.isOnDeviceRecognitionAvailable()
