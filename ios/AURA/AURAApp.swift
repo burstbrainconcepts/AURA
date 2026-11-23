@@ -675,13 +675,13 @@ struct ContentView: View {
 
     var body: some View {
         ZStack {
-            LinearGradient(colors: [Color(red: 0.07, green: 0.11, blue: 0.22), Color(red: 0.025, green: 0.04, blue: 0.09)], startPoint: .topLeading, endPoint: .bottomTrailing)
+            LinearGradient(colors: [Color(red: 0.12, green: 0.055, blue: 0.22), Color(red: 0.025, green: 0.012, blue: 0.07)], startPoint: .topLeading, endPoint: .bottomTrailing)
                 .ignoresSafeArea()
             VStack(spacing: 0) {
                 HStack(spacing: 12) {
                     ZStack {
                         RoundedRectangle(cornerRadius: 13).fill(Color(red: 0.035, green: 0.045, blue: 0.11))
-                        Circle().stroke(Color(red: 0.53, green: 0.23, blue: 1).opacity(0.65), lineWidth: 1).padding(5)
+                        Circle().stroke(Color(red: 0.48, green: 0.20, blue: 0.95).opacity(0.65), lineWidth: 1).padding(5)
                         Ellipse().stroke(LinearGradient(colors: [Color(red: 0.78, green: 0.55, blue: 1), Color(red: 0.42, green: 0.18, blue: 0.95)], startPoint: .top, endPoint: .bottom), lineWidth: 3).frame(width: 17, height: 33).rotationEffect(.degrees(32))
                         Ellipse().stroke(LinearGradient(colors: [Color(red: 0.55, green: 1, blue: 1), Color(red: 0.05, green: 0.72, blue: 0.9)], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 3).frame(width: 34, height: 15).rotationEffect(.degrees(-25))
                         Circle().fill(Color.white).frame(width: 5, height: 5).shadow(color: .purple, radius: 7)
@@ -700,7 +700,7 @@ struct ContentView: View {
                     memory.tag(1).tabItem { Label("Memory", systemImage: "lock.shield") }
                     guardView.tag(2).tabItem { Label("Guard", systemImage: "shield.lefthalf.filled") }
                     settings.tag(3).tabItem { Label("Settings", systemImage: "slider.horizontal.3") }
-                }.tint(Color(red: 0.58, green: 0.68, blue: 1))
+                }.tint(Color(red: 0.78, green: 0.65, blue: 1))
             }
         }
         .task { await assistant.checkHealth() }
@@ -757,7 +757,7 @@ struct ContentView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Think clearly.").font(.system(size: 29, weight: .semibold, design: .rounded))
-                    Text("Move confidently.").font(.system(size: 22, weight: .medium, design: .rounded)).foregroundStyle(.cyan.opacity(0.9))
+                    Text("Move confidently.").font(.system(size: 22, weight: .medium, design: .rounded)).foregroundStyle(Color(red: 0.78, green: 0.65, blue: 1))
                 }
                 Spacer()
                 Button { assistant.clearConversation() } label: {
@@ -797,7 +797,7 @@ struct ContentView: View {
                     message = ""
                     Task { await assistant.send(value, savedMemory: memoryVault.enabled ? memoryVault.items : []) }
                 } label: {
-                    Image(systemName: "arrow.up").font(.headline).foregroundStyle(.white).frame(width: 45, height: 45).background(Color(red: 0.53, green: 0.23, blue: 1), in: RoundedRectangle(cornerRadius: 13))
+                    Image(systemName: "arrow.up").font(.headline).foregroundStyle(.white).frame(width: 45, height: 45).background(Color(red: 0.48, green: 0.20, blue: 0.95), in: RoundedRectangle(cornerRadius: 13))
                 }.disabled(assistant.isBusy || message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }.padding(.bottom, 8)
         }.padding(.horizontal, 22)
