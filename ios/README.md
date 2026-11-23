@@ -10,6 +10,7 @@ Native SwiftUI application target for iPhone and iPad.
 - Configurable local inference URL and optional API key. The key remains in app memory and is not saved in preferences.
 - Opt-in encrypted memory using AES-GCM. The encryption key is stored in the iOS Keychain with device-only accessibility; encrypted memory data is stored with complete file protection. Memory is manually saved, reviewable, deletable and can be disabled.
 - AURA Guard controller for listing registered devices, queuing explicitly confirmed lock and location-refresh commands, clearing a stored location and revoking device credentials. The account API token is stored in the Keychain after a successful connection.
+- Native iPhone enrollment using a device-generated Ed25519 key, one-time server challenge, signed proof and Keychain-protected device credential. The iPhone currently enrolls with no remote-action capabilities; this is intentional until a native action adapter is implemented and verified.
 - Capability-first platform design: approval-dependent features remain in the roadmap and are evaluated against the current device, account, entitlements and agreements.
 
 ## Connect local AI
@@ -22,7 +23,7 @@ Deploy the recovery API with PostgreSQL and HTTPS as described in [the recovery 
 
 Remote commands are signed and expiring. Lock and location-refresh requests require a confirmation in the app and the target device must be enrolled with the matching capability and online to receive the command. Revocation also requires confirmation. A queued command is not proof that the target device executed it.
 
-The current iOS Guard target is an account controller for other enrolled devices. Native enrollment of the iPhone itself, device-specific recovery execution and additional platform management integrations remain future work.
+The iPhone can now enroll itself as a device-bound identity and appear in the account registry. It does not yet execute remote recovery actions; its enrollment advertises no action capabilities. Device-specific recovery execution and additional platform management integrations remain future work.
 
 ## Build
 
