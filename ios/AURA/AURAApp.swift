@@ -673,6 +673,7 @@ struct ContentView: View {
     @State private var memoryDraft = ""
     @State private var selectedTab = 0
     @State private var message = ""
+    @State private var speechSilenceTask: Task<Void, Never>?
 
     var body: some View {
         ZStack {
@@ -739,7 +740,24 @@ struct ContentView: View {
             if phase != .active && speech.isRecording { speech.stop() }
         }
         .onChange(of: speech.transcript) { value in
-            if !value.isEmpty { message = value }
+            guard !value.isEmpty else { return }
+            message = value
+            speechSilenceTask?.cancel()
+            speechSilenceTask = Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 1_700_000_000)
+                guard !Task.isCancelled, speech.isRecording else { return }
+                speech.stop()
+                let spoken = speech.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+                message = ""
+                if spoken.isEmpty { return }
+                let command = spoken.lowercased()
+                if ["end conversation", "close conversation", "go to sleep", "stop conversation", "goodbye aura"].contains(command) {
+                    assistant.clearConversation()
+                    speechOutput.stop()
+                    return
+                }
+                await assistant.send(spoken, savedMemory: memoryVault.enabled ? memoryVault.items : [])
+            }
         }
         .onChange(of: assistant.lastAnswer) { value in
             if voiceOutputEnabled && !value.isEmpty { speechOutput.speak(value) }
