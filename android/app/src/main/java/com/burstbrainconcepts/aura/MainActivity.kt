@@ -82,7 +82,8 @@ class MainActivity : Activity() {
         voice = OfflineVoiceController(
             this,
             { spoken -> runOnUiThread { input.setText(spoken); if (spoken.isNotBlank()) sendMessage() } },
-            { message -> runOnUiThread { status.text = message } }
+            { message -> runOnUiThread { status.text = message } },
+            { runOnUiThread { status.text = "No speech detected. Returning to wake-word standby." } }
         )
         voice.initialize()
         speakToggle.text = "Voice replies: on"
