@@ -47,9 +47,16 @@
 
 ## Verification status
 
-The desktop and iOS targets now connect to a local llama.cpp HTTP server. The iOS target also includes opt-in AES-GCM memory with a device-only Keychain key and a Guard controller for listing devices, queueing approved lock/location commands, clearing stored locations and revoking devices. The desktop app has a native Rust localhost inference bridge, passphrase-encrypted AES-256-GCM memory vault and authenticated Device Guard controller for enrolled-device management and confirmed recovery actions. Cloud workflows have been added, but their first CI builds must pass before either target is considered build-verified. The iOS workflow produces an unsigned Simulator app; a signed physical-device build and distribution require the applicable signing configuration. Desktop installers are produced independently for each runner OS.
+**Verified CI results (23 November 2026):**
 
-The Android native APK build and physical-device test have not yet been confirmed. The recovery API is deployable with Docker Compose or Railway but is not yet confirmed deployed to a live server. iOS Guard control depends on that service being deployed and configured; native iPhone enrollment and local iOS inference against a real computer-hosted model still need end-to-end testing. Desktop speech input, native iPhone enrollment, end-to-end recovery testing and cross-device memory sync remain outstanding. iOS offline speech recognition is capability-checked at runtime and depends on the installed language/device support.
+- **Core:** passing. The latest workflow completed dependency installation, recovery-server JavaScript syntax checks, the full `npm test` workspace suite and the recovery API Docker image build.
+- **Desktop:** Windows, macOS and Linux matrix builds all passed. GitHub uploaded separate desktop bundle artifacts.
+- **iOS:** the SwiftUI simulator app compiled, packaged and uploaded successfully. This is an unsigned Simulator artifact, not a physical-device IPA.
+- **Android:** the native APK workflow is running against the pinned llama.cpp revision; do not treat the APK as available until the workflow verifies and uploads it.
+
+The desktop app has a native Rust localhost inference bridge, passphrase-encrypted AES-256-GCM memory vault, optional local system voice output and authenticated Device Guard controls. The iOS app has local llama.cpp HTTP chat, offline-capability-checked speech input, local speech output, Keychain-backed AES-GCM opt-in memory and Guard controls. Android includes the in-process llama.cpp JNI runtime, verified starter-model download, offline voice, encrypted opt-in memory and signed recovery polling.
+
+**Not yet end-to-end verified:** physical-device installation and testing on each platform; iPhone-native enrollment and on-device model execution; desktop speech input; live recovery API deployment and multi-device recovery drills; cross-device memory sync; and production signing/distribution. These are distinct from the passing CI builds. Platform approvals and signing requirements must be checked against the actual release configuration at operationalization.
 
 Run workspace tests from a local clone:
 
