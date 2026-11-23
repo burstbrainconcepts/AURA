@@ -258,7 +258,7 @@ class MainActivity : Activity() {
             quick.addView(tile, LinearLayout.LayoutParams(0, (76 * resources.displayMetrics.density).toInt(), 1f).apply {
                 marginEnd = (7 * resources.displayMetrics.density).toInt()
             })
-            tile.setOnClickListener { showPage("Chat"); if (item.contains("Voice")) voice.startListening() }
+            tile.setOnClickListener { when { item.contains("Voice") -> { showPage("Voice"); voice.startListening() }; item.contains("Create") || item.contains("Tools") -> showPage("Create"); else -> showPage("Chat") } }
         }
         home.addView(quick)
         home.addView(spacer(14))
@@ -281,7 +281,7 @@ class MainActivity : Activity() {
                 setPadding(4, 14, 4, 14)
             }
             actions.addView(t, LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = 6 })
-            t.setOnClickListener { showPage("Chat"); input.setText("$item: ") ; input.requestFocus() }
+            t.setOnClickListener { showPage("Create"); input.setText("$item: ") ; input.requestFocus() }
         }
         home.addView(actions)
         home.addView(section("YOUR DEVICE"))
@@ -332,6 +332,48 @@ class MainActivity : Activity() {
         chat.addView(controls)
         send = button("Send message  ➤", true) { sendMessage() }.apply { isEnabled = false }
         chat.addView(send)
+
+        // VOICE — dedicated hands-free assistant screen.
+        val voicePage = column()
+        voicePage.addView(text("AURA Voice", 24f, white, true))
+        voicePage.addView(text("Talk naturally. AURA listens on this device.", 13f, muted))
+        voicePage.addView(spacer(24))
+        val orb = TextView(this).apply {
+            text = "◉"
+            gravity = android.view.Gravity.CENTER
+            textSize = 82f
+            setTextColor(lavender)
+            background = rounded(panel2, 160f, purple)
+            elevation = 12f
+        }
+        voicePage.addView(orb, LinearLayout.LayoutParams(-1, (210 * resources.displayMetrics.density).toInt()).apply {
+            leftMargin = (44 * resources.displayMetrics.density).toInt()
+            rightMargin = (44 * resources.displayMetrics.density).toInt()
+        })
+        voicePage.addView(spacer(18))
+        voicePage.addView(text("Ready when you are", 18f, white, true).apply { gravity = android.view.Gravity.CENTER })
+        voicePage.addView(text("Tap the microphone to speak. Enable Hey AURA in Settings for optional wake listening.", 12f, muted).apply { gravity = android.view.Gravity.CENTER })
+        voicePage.addView(spacer(18))
+        voicePage.addView(button("🎙  Start listening", true) { voice.startListening() })
+        voicePage.addView(button("Stop voice output") { voice.stopSpeaking() })
+
+        // CREATE & TOOLS — accessible shortcuts for writing, coding and translation.
+        val toolsPage = column()
+        toolsPage.addView(text("Create with AURA", 24f, white, true))
+        toolsPage.addView(text("Choose a workspace to start creating.", 13f, muted))
+        toolsPage.addView(spacer(14))
+        listOf("Write and edit", "Summarize documents", "Translate text", "Code assistant", "Brainstorm ideas", "Plan a project").forEach { action ->
+            val item = card(panel2)
+            item.addView(text(action, 15f, white, true))
+            item.addView(text("Open a private AURA chat with this task ready.", 11f, muted))
+            item.setOnClickListener {
+                showPage("Chat")
+                input.setText("$action: ")
+                input.requestFocus()
+            }
+            toolsPage.addView(item)
+            toolsPage.addView(spacer(7))
+        }
 
         // DOWNLOADS — light product cards like the reference design.
         val downloads = column(true)
@@ -464,6 +506,8 @@ class MainActivity : Activity() {
 
         pageViews["Home"] = scroll(home)
         pageViews["Chat"] = scroll(chat)
+        pageViews["Voice"] = scroll(voicePage)
+        pageViews["Create"] = scroll(toolsPage)
         pageViews["Downloads"] = scroll(downloads)
         pageViews["Notifications"] = scroll(notifications)
         pageViews["Settings"] = scroll(settings)
@@ -477,8 +521,8 @@ class MainActivity : Activity() {
             }
         }
         showPage = { name -> selectPage(name) }
-        listOf("Home", "Chat", "Downloads", "Notifications", "Settings").forEach { name ->
-            val icon = when (name) { "Home" -> "⌂"; "Chat" -> "▢"; "Downloads" -> "♧"; "Notifications" -> "♧"; else -> "⚙" }
+        listOf("Home", "Chat", "Create", "Downloads", "Settings").forEach { name ->
+            val icon = when (name) { "Home" -> "⌂"; "Chat" -> "▢"; "Create" -> "✧"; "Downloads" -> "⇩"; else -> "⚙" }
             val b = Button(this).apply {
                 text = "$icon\n$name"; isAllCaps = false; textSize = 9f
                 setTextColor(muted); background = rounded(0xFF160D2D.toInt(), 15f)
