@@ -4,8 +4,8 @@ AURA is a native Kotlin Android app with a CPU-first llama.cpp JNI runtime.
 
 ## Implemented Android features
 
-- The cloud build fetches the pinned llama.cpp revision and compiles it through the Android NDK/CMake toolchain.
-- The app offers an explicit first-run download of the Qwen2.5 0.5B Instruct Q4_K_M GGUF starter model (about 398 MB). The model repository revision is pinned and its SHA-256 is verified before loading.
+- The cloud build fetches the pinned llama.cpp revision and compiles it through the Android NDK/CMake toolchain for `arm64-v8a` (the primary Android phone ABI), keeping the direct-download APK lean. An x86_64 emulator build can be produced separately when needed.
+- The base installer does not bundle the AI model. On first launch, AURA asks the user to download the Qwen2.5 0.5B Instruct Q4_K_M GGUF starter model (about 398 MB); the user can defer and download later. The model repository revision is pinned and its SHA-256 is verified before loading.
 - Chat inference runs in-process through JNI. Conversation text is not sent to a remote inference API.
 - The model uses a 2,048-token context and a conservative CPU thread limit.
 - Optional speech input uses Android's on-device speech recognizer only; AURA does not fall back to a cloud recognizer.
@@ -33,11 +33,11 @@ The Android recovery adapter checks the active security providers for Ed25519 ke
 
 ## Cloud build
 
-The **Android cloud build** GitHub Actions workflow fetches the exact pinned llama.cpp commit, installs Android NDK/CMake, runs `gradle :app:assembleDebug`, and uploads `aura-android-debug` as a workflow artifact.
+The **Android cloud build** GitHub Actions workflow fetches the exact pinned llama.cpp commit, installs Android NDK/CMake, runs `gradle :app:assembleDebug`, and uploads `aura-android-debug` as a workflow artifact. The direct-download debug APK is built for `arm64-v8a` to avoid carrying the unused x86_64 native engine in a phone install.
 
 ## Build and install the debug APK
 
-The Android workflow builds the native JNI library and Kotlin application from the pinned llama.cpp revision. It targets `arm64-v8a` and `x86_64`; the primary phone target is `arm64-v8a`.
+The Android workflow builds the native JNI library and Kotlin application from the pinned llama.cpp revision. It targets `arm64-v8a`, which is the intended direct-download phone build.
 
 For a local build, first check out the pinned upstream source using the repository bootstrap script, then run:
 
