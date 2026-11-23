@@ -698,9 +698,11 @@ struct ContentView: View {
 
                 TabView(selection: $selectedTab) {
                     assistantView.tag(0).tabItem { Label("Assistant", systemImage: "sparkles") }
-                    memory.tag(1).tabItem { Label("Memory", systemImage: "lock.shield") }
-                    guardView.tag(2).tabItem { Label("Guard", systemImage: "shield.lefthalf.filled") }
-                    settings.tag(3).tabItem { Label("Settings", systemImage: "slider.horizontal.3") }
+                    downloads.tag(1).tabItem { Label("Downloads", systemImage: "arrow.down.circle") }
+                    notifications.tag(2).tabItem { Label("Notifications", systemImage: "bell") }
+                    memory.tag(3).tabItem { Label("Memory", systemImage: "lock.shield") }
+                    guardView.tag(4).tabItem { Label("Guard", systemImage: "shield.lefthalf.filled") }
+                    settings.tag(5).tabItem { Label("Settings", systemImage: "slider.horizontal.3") }
                 }.tint(Color(red: 0.78, green: 0.65, blue: 1))
             }
         }
@@ -833,6 +835,65 @@ struct ContentView: View {
         Text(text).font(.subheadline).textSelection(.enabled).padding(13)
             .background(isAssistant ? Color.white.opacity(0.07) : Color.indigo.opacity(0.34), in: RoundedRectangle(cornerRadius: 14))
             .frame(maxWidth: 310, alignment: .leading)
+    }
+
+    private var downloads: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Downloads & updates").font(.system(size: 27, weight: .semibold, design: .rounded))
+            Text("Manage the AI runtime connected to AURA on this iPhone.")
+                .font(.subheadline).foregroundStyle(.secondary)
+            HStack(spacing: 14) {
+                Image(systemName: "cube.transparent").font(.system(size: 28)).foregroundStyle(Color(red: 0.78, green: 0.65, blue: 1))
+                    .frame(width: 58, height: 58).background(Color.purple.opacity(0.18), in: RoundedRectangle(cornerRadius: 16))
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("Local AI runtime").font(.headline)
+                    Text(assistant.engineOnline ? "Connected and responding" : "Not connected").font(.caption).foregroundStyle(assistant.engineOnline ? .green : .secondary)
+                }
+                Spacer()
+            }.padding(16).background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 16))
+            Text("The current iOS build connects to a local llama.cpp-compatible runtime configured in Settings. It does not yet include the Android 397 MB starter-model downloader or automatic app updates.")
+                .font(.subheadline).foregroundStyle(.secondary)
+            Button {
+                Task { await assistant.checkHealth() }
+            } label: {
+                Label("Check connection", systemImage: "arrow.clockwise").frame(maxWidth: .infinity).padding(.vertical, 12)
+            }.buttonStyle(.borderedProminent).tint(Color(red: 0.48, green: 0.20, blue: 0.95))
+            Button("Configure runtime in Settings") { selectedTab = 5 }
+                .buttonStyle(.bordered).tint(Color(red: 0.78, green: 0.65, blue: 1))
+            Text(assistant.status).font(.caption).foregroundStyle(.secondary)
+            Spacer()
+        }.padding(22)
+    }
+
+    private var notifications: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Notifications").font(.system(size: 27, weight: .semibold, design: .rounded))
+            Text("Setup and runtime activity").font(.subheadline).foregroundStyle(.secondary)
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "sparkles").foregroundStyle(Color(red: 0.78, green: 0.65, blue: 1))
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("Welcome to AURA").font(.headline)
+                    Text("Your private assistant workspace is ready. Connect a local model runtime to begin.")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                }
+            }.padding(15).frame(maxWidth: .infinity, alignment: .leading).background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 14))
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "lock.shield").foregroundStyle(.green)
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("Privacy controls").font(.headline)
+                    Text("Encrypted memory remains off until you enable it. Recovery actions require explicit confirmation.")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                }
+            }.padding(15).frame(maxWidth: .infinity, alignment: .leading).background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 14))
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: assistant.engineOnline ? "checkmark.circle" : "exclamationmark.circle").foregroundStyle(assistant.engineOnline ? .green : .orange)
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("Model connection").font(.headline)
+                    Text(assistant.status).font(.subheadline).foregroundStyle(.secondary)
+                }
+            }.padding(15).frame(maxWidth: .infinity, alignment: .leading).background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 14))
+            Spacer()
+        }.padding(22)
     }
 
     private var memory: some View {
