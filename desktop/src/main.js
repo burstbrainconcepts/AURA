@@ -6,9 +6,12 @@ const DEFAULT_ENDPOINT = "http://127.0.0.1:8080";
 let endpoint = localStorage.getItem("aura.inference.endpoint") || DEFAULT_ENDPOINT;
 let whisperEndpoint = localStorage.getItem("aura.voice.input.endpoint") || "http://127.0.0.1:8081";
 let voiceInputStatus = "Offline voice input is ready when a local whisper.cpp server is running.";
-let voiceRecorder = null;
+let voiceContext = null;
+let voiceSource = null;
+let voiceProcessor = null;
 let voiceStream = null;
-let voiceChunks = [];
+let voicePcmChunks = [];
+let voiceSampleCount = 0;
 let voiceRecording = false;
 let voiceTranscribing = false;
 let history = [];
@@ -257,6 +260,7 @@ async function renderMemoryPanel() {
 
 
 
+
 function setVoiceInputStatus(message) {
   voiceInputStatus = message;
   const status = document.querySelector("#voice-status");
@@ -274,88 +278,143 @@ function stopVoiceStream() {
   if (voiceStream) voiceStream.getTracks().forEach((track) => track.stop());
   voiceStream = null;
 }
+function encodePcmWav(chunks, sampleRate) {
+  const sampleCount = chunks.reduce((total, chunk) => total + chunk.length, 0);
+  if (!sampleCount) throw new Error("No microphone audio was captured.");
+  const dataBytes = sampleCount * 2;
+  const buffer = new ArrayBuffer(44 + dataBytes);
+  const view = new DataView(buffer);
+  const writeAscii = (offset, value) => {
+    for (let i = 0; i < value.length; i++) view.setUint8(offset + i, value.charCodeAt(i));
+  };
+  writeAscii(0, "RIFF");
+  view.setUint32(4, 36 + dataBytes, true);
+  writeAscii(8, "WAVE");
+  writeAscii(12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  writeAscii(36, "data");
+  view.setUint32(40, dataBytes, true);
+  let offset = 44;
+  for (const chunk of chunks) {
+    for (let i = 0; i < chunk.length; i++) {
+      const sample = Math.max(-1, Math.min(1, chunk[i]));
+      view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true);
+      offset += 2;
+    }
+  }
+  return new Blob([buffer], { type: "audio/wav" });
+}
+async function finishVoiceRecording(discard = false) {
+  if (!voiceRecording && !voiceContext && !voiceStream) return;
+  const chunks = voicePcmChunks;
+  const sampleRate = voiceContext?.sampleRate || 48000;
+  voicePcmChunks = [];
+  voiceSampleCount = 0;
+  voiceRecording = false;
+  if (voiceProcessor) {
+    voiceProcessor.onaudioprocess = null;
+    try { voiceProcessor.disconnect(); } catch {}
+  }
+  if (voiceSource) {
+    try { voiceSource.disconnect(); } catch {}
+  }
+  voiceProcessor = null;
+  voiceSource = null;
+  const context = voiceContext;
+  voiceContext = null;
+  stopVoiceStream();
+  updateRecordButton();
+  if (discard) {
+    if (context && context.state !== "closed") await context.close().catch(() => {});
+    setVoiceInputStatus("Recording discarded. No audio was sent for transcription.");
+    return;
+  }
+  voiceTranscribing = true;
+  updateRecordButton();
+  setVoiceInputStatus("Transcribing locally with whisper.cpp…");
+  try {
+    if (context && context.state !== "closed") await context.close();
+    const blob = encodePcmWav(chunks, sampleRate);
+    if (blob.size < 512) throw new Error("The recording was too short. Try speaking for longer.");
+    if (blob.size > 20 * 1024 * 1024) throw new Error("Recording exceeds the 20 MB safety limit. Record a shorter message.");
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    let binary = "";
+    for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+      binary += String.fromCharCode(...bytes.subarray(offset, Math.min(offset + 0x8000, bytes.length)));
+    }
+    const transcript = await invoke("local_transcribe", {
+      baseUrl: whisperEndpoint,
+      audioBase64: btoa(binary),
+      contentType: "audio/wav"
+    });
+    const input = document.querySelector("#prompt");
+    if (input) {
+      input.value = [input.value.trim(), transcript.trim()].filter(Boolean).join(" ");
+      input.focus();
+    }
+    setVoiceInputStatus("Transcript ready. Review it and tap Send.");
+  } catch (error) {
+    setVoiceInputStatus("Offline transcription failed: " + String(error));
+  } finally {
+    voiceTranscribing = false;
+    updateRecordButton();
+  }
+}
 async function toggleVoiceRecording() {
-  if (voiceRecording && voiceRecorder) {
-    voiceRecorder.stop();
+  if (voiceRecording) {
+    await finishVoiceRecording(false);
     return;
   }
   if (voiceTranscribing) return;
-  if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!navigator.mediaDevices?.getUserMedia || !AudioContextClass) {
     setVoiceInputStatus("Microphone recording is unavailable in this desktop runtime.");
     return;
   }
   try {
     voiceStream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+      audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true }
     });
-    const candidates = ["audio/webm;codecs=opus", "audio/ogg;codecs=opus", "audio/mp4"];
-    const mimeType = candidates.find((candidate) => MediaRecorder.isTypeSupported(candidate));
-    voiceRecorder = mimeType ? new MediaRecorder(voiceStream, { mimeType }) : new MediaRecorder(voiceStream);
-    voiceChunks = [];
-    voiceRecorder.ondataavailable = (event) => {
-      if (event.data && event.data.size) voiceChunks.push(event.data);
-    };
-    voiceRecorder.onerror = () => {
-      voiceRecording = false;
-      stopVoiceStream();
-      updateRecordButton();
-      setVoiceInputStatus("Microphone recording failed. Check the system microphone permission.");
-    };
-    voiceRecorder.onstop = async () => {
-      const recordedType = voiceRecorder?.mimeType || "audio/webm";
-      const blob = new Blob(voiceChunks, { type: recordedType });
-      voiceRecorder = null;
-      voiceChunks = [];
-      voiceRecording = false;
-      stopVoiceStream();
-      voiceTranscribing = true;
-      updateRecordButton();
-      setVoiceInputStatus("Transcribing locally with whisper.cpp…");
-      try {
-        if (blob.size < 512) throw new Error("The recording was too short. Try speaking for longer.");
-        if (blob.size > 20 * 1024 * 1024) throw new Error("Recording exceeds the 20 MB safety limit. Record a shorter message.");
-        const bytes = new Uint8Array(await blob.arrayBuffer());
-        let binary = "";
-        for (let offset = 0; offset < bytes.length; offset += 0x8000) {
-          binary += String.fromCharCode(...bytes.subarray(offset, Math.min(offset + 0x8000, bytes.length)));
-        }
-        const transcript = await invoke("local_transcribe", {
-          baseUrl: whisperEndpoint,
-          audioBase64: btoa(binary),
-          contentType: blob.type || "audio/webm"
-        });
-        const input = document.querySelector("#prompt");
-        if (input) {
-          input.value = [input.value.trim(), transcript.trim()].filter(Boolean).join(" ");
-          input.focus();
-        }
-        setVoiceInputStatus("Transcript ready. Review it and tap Send.");
-      } catch (error) {
-        setVoiceInputStatus("Offline transcription failed: " + String(error));
-      } finally {
-        voiceTranscribing = false;
-        updateRecordButton();
+    voiceContext = new AudioContextClass({ latencyHint: "interactive" });
+    await voiceContext.resume();
+    if (typeof voiceContext.createScriptProcessor !== "function") {
+      throw new Error("This desktop audio runtime does not expose PCM capture.");
+    }
+    voiceSource = voiceContext.createMediaStreamSource(voiceStream);
+    voiceProcessor = voiceContext.createScriptProcessor(4096, 1, 1);
+    voicePcmChunks = [];
+    voiceSampleCount = 0;
+    voiceProcessor.onaudioprocess = (event) => {
+      if (!voiceRecording) return;
+      const input = event.inputBuffer.getChannelData(0);
+      voicePcmChunks.push(new Float32Array(input));
+      voiceSampleCount += input.length;
+      event.outputBuffer.getChannelData(0).fill(0);
+      if (44 + voiceSampleCount * 2 >= 20 * 1024 * 1024) {
+        setVoiceInputStatus("The recording reached the 20 MB limit. Transcribing now.");
+        void finishVoiceRecording(false);
       }
     };
-    voiceRecorder.start(250);
+    voiceSource.connect(voiceProcessor);
+    voiceProcessor.connect(voiceContext.destination);
     voiceRecording = true;
     updateRecordButton();
-    setVoiceInputStatus("Recording on this device. Tap Stop when you finish speaking.");
+    setVoiceInputStatus("Recording locally. Tap Stop when you finish speaking.");
   } catch (error) {
-    stopVoiceStream();
+    await finishVoiceRecording(true);
     voiceRecording = false;
     updateRecordButton();
     setVoiceInputStatus("Microphone unavailable: " + String(error));
   }
 }
 function stopVoiceRecording() {
-  if (voiceRecorder && voiceRecorder.state !== "inactive") {
-    try { voiceRecorder.stop(); } catch { stopVoiceStream(); }
-  } else {
-    stopVoiceStream();
-    voiceRecording = false;
-    updateRecordButton();
-  }
+  if (voiceRecording || voiceContext || voiceStream) void finishVoiceRecording(true);
 }
 
 function speakReply(text) {

@@ -290,17 +290,13 @@ async fn local_transcribe(base_url: String, audio_base64: String, content_type: 
         return Err("Audio recording must be between 512 bytes and 20 MB".into());
     }
     let mime = content_type.split(';').next().unwrap_or("").trim().to_ascii_lowercase();
-    let (mime, filename) = match mime.as_str() {
-        "audio/webm" => ("audio/webm", "aura-recording.webm"),
-        "audio/ogg" => ("audio/ogg", "aura-recording.ogg"),
-        "audio/mp4" => ("audio/mp4", "aura-recording.mp4"),
-        "audio/wav" | "audio/x-wav" => ("audio/wav", "aura-recording.wav"),
-        _ => return Err("Unsupported audio format from the microphone recorder".into()),
-    };
+    if mime != "audio/wav" {
+        return Err("AURA sends mono WAV recordings to the local speech server".into());
+    }
     let mut url = validate_local_url(&base_url)?;
     url.set_path(&format!("{}/inference", url.path().trim_end_matches('/')));
-    let part = Part::bytes(audio).file_name(filename)
-        .mime_str(mime).map_err(|_| "Unsupported audio content type".to_string())?;
+    let part = Part::bytes(audio).file_name("aura-recording.wav")
+        .mime_str("audio/wav").map_err(|_| "Unsupported WAV content type".to_string())?;
     let form = Form::new()
         .part("file", part)
         .text("temperature", "0.0")

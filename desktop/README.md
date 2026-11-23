@@ -24,13 +24,13 @@ Open AURA Settings and configure the local endpoint if it differs from the defau
 
 ## Offline voice input
 
-Build whisper.cpp with its HTTP server and FFmpeg audio conversion enabled, then start it with a downloaded local speech model, for example:
+Build whisper.cpp with its HTTP server, then start it with a downloaded multilingual speech model, for example:
 
 ```sh
-./build/bin/whisper-server -m ./models/ggml-base.en.bin --host 127.0.0.1 --port 8081
+./build/bin/whisper-server -m ./models/ggml-base.bin -l auto --host 127.0.0.1 --port 8081
 ```
 
-If the server is built without FFmpeg conversion, browser-recorded WebM/OGG audio may not be accepted. Enable FFmpeg support in the whisper.cpp build or use a WAV recording format. In AURA Settings, set the whisper.cpp URL (default `http://127.0.0.1:8081`). In the Assistant, tap **Mic**, speak, tap **Stop**, review the transcript and then tap **Send**. The native bridge accepts only localhost endpoints and limits recordings to 20 MB. The operating system may request microphone permission on first use.
+AURA captures mono 16-bit PCM and wraps it in a WAV file locally, so the server does not need FFmpeg audio conversion. The multilingual `base` model supports both English and Hausa; use `-l auto` for automatic language detection or `-l ha` to force Hausa. In AURA Settings, set the whisper.cpp URL (default `http://127.0.0.1:8081`). In the Assistant, tap **Mic**, speak, tap **Stop**, review the transcript and then tap **Send**. Audio is sent only to the configured localhost endpoint and recordings are limited to 20 MB. Leaving the Assistant while recording discards the unfinished recording. The operating system may request microphone permission on first use.
 
 ## Memory
 
