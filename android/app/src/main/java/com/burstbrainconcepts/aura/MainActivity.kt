@@ -231,6 +231,15 @@ class MainActivity : Activity() {
         root.addView(heading)
         root.addView(status)
         root.addView(presenceButton)
+        overlayButton = Button(this).apply {
+            text = if (getSharedPreferences("aura_presence", MODE_PRIVATE)
+                .getBoolean("floating_enabled", false)) {
+                "Dismiss floating AURA bubble"
+            } else {
+                "Enable floating AURA bubble"
+            }
+            setOnClickListener { toggleFloatingAssistant() }
+        }
         root.addView(overlayButton)
         root.addView(download)
         root.addView(downloadProgress)
