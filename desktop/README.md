@@ -38,6 +38,16 @@ AURA captures mono 16-bit PCM and wraps it in a WAV file locally, so the server 
 
 Open Memory and enter a passphrase of at least 12 characters. The passphrase is never stored by AURA. Use the same passphrase to unlock the vault in future sessions. If the passphrase is lost, the encrypted vault cannot be recovered. Deleting the vault permanently removes its encrypted data.
 
+## Desktop installers
+
+The desktop CI workflow builds three separate native targets:
+
+- **Windows:** Tauri installer bundle (NSIS/MSI where configured by the project).
+- **macOS:** Tauri app bundle and DMG where configured by the project.
+- **Linux:** Tauri Linux bundles (DEB/RPM/AppImage where configured by the project).
+
+Each platform uploads its own GitHub Actions artifact named `aura-desktop-Windows`, `aura-desktop-macOS`, or `aura-desktop-Linux`. Download the artifact for the operating system you intend to install. These CI artifacts are unsigned development builds unless a signing and notarization workflow is configured; macOS distribution may therefore require additional security approval.
+
 ## Build
 
 The GitHub Actions workflow builds Windows, macOS and Linux bundles and uploads artifacts. A successful workflow run is required before distributing the installers.
