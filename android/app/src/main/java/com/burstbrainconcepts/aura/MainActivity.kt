@@ -1,5 +1,7 @@
 package com.burstbrainconcepts.aura
 
+// Android UI build: branded AURA screen and overlay controls.
+
 import android.app.Activity
 import android.app.AlertDialog
 import android.app.admin.DevicePolicyManager
