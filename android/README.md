@@ -34,3 +34,25 @@ The current Android remote-recovery client requires Android 13+ for the platform
 ## Cloud build
 
 The **Android cloud build** GitHub Actions workflow fetches the exact pinned llama.cpp commit, installs Android NDK/CMake, runs `gradle :app:assembleDebug`, and uploads `aura-android-debug` as a workflow artifact.
+
+## Build and install the debug APK
+
+The Android workflow builds the native JNI library and Kotlin application from the pinned llama.cpp revision. It targets `arm64-v8a` and `x86_64`; the primary phone target is `arm64-v8a`.
+
+For a local build, first check out the pinned upstream source using the repository bootstrap script, then run:
+
+```sh
+bash scripts/bootstrap-upstreams.sh
+cd android
+gradle :app:assembleDebug
+```
+
+The debug APK is written to `android/app/build/outputs/apk/debug/app-debug.apk`. Install it on a connected Android device with:
+
+```sh
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
+
+The cloud workflow does not require a developer workstation. It fetches the pinned source, provisions Java/Android SDK/NDK/CMake, builds the APK, verifies that the APK is non-empty, prints its SHA-256 digest and uploads the `aura-android-debug` artifact. Artifacts are temporary CI downloads, not permanent releases.
+
+The debug APK is not a Play Store or production-signed package. Before a production release, complete physical-device testing, signing-key custody, versioning, model-download validation, privacy review and the platform-specific release checks for the intended distribution channel.
