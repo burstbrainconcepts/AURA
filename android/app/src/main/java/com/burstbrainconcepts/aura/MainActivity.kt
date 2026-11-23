@@ -332,10 +332,10 @@ class MainActivity : Activity() {
     }
 
     private fun showRecoverySetup() {
-        if (Build.VERSION.SDK_INT < 33) {
+        if (!recovery.isEd25519Available()) {
             AlertDialog.Builder(this)
-                .setTitle("Android version not supported")
-                .setMessage("Secure remote recovery currently requires Android 13 or later for the Ed25519 signing provider.")
+                .setTitle("Recovery cryptography unavailable")
+                .setMessage("AURA checked this device's current security providers and could not find the Ed25519 signing and verification support required for secure recovery. This is a device-specific result, not a permanent Android-version rule. You can retry after a system update or supported security-provider configuration.")
                 .setPositiveButton("OK", null)
                 .show()
             return
