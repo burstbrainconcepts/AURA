@@ -1,10 +1,15 @@
 import { invoke } from "@tauri-apps/api/core";
 import "./style.css";
 
-const app = document.querySelector("#app");
+const app = document.querySelector("#app") || document.body;
+const safeStorage = {
+  get(key) { try { return window.localStorage.getItem(key); } catch { return null; } },
+  set(key, value) { try { window.localStorage.setItem(key, value); return true; } catch { return false; } },
+  remove(key) { try { window.localStorage.removeItem(key); return true; } catch { return false; } }
+};
 const DEFAULT_ENDPOINT = "http://127.0.0.1:8080";
-let endpoint = localStorage.getItem("aura.inference.endpoint") || DEFAULT_ENDPOINT;
-let whisperEndpoint = localStorage.getItem("aura.voice.input.endpoint") || "http://127.0.0.1:8081";
+let endpoint = safeStorage.get("aura.inference.endpoint") || DEFAULT_ENDPOINT;
+let whisperEndpoint = safeStorage.get("aura.voice.input.endpoint") || "http://127.0.0.1:8081";
 let voiceInputStatus = "Offline voice input is ready when a local whisper.cpp server is running.";
 let voiceContext = null;
 let voiceSource = null;
@@ -16,12 +21,12 @@ let voiceRecording = false;
 let voiceTranscribing = false;
 let history = [];
 let busy = false;
-let voiceOutputEnabled = localStorage.getItem("aura.voice.output.enabled") === "true";
+let voiceOutputEnabled = safeStorage.get("aura.voice.output.enabled") === "true";
 let voiceStatus = "Local voice output is off.";
 let memoryUnlocked = false;
 let memoryPassphrase = "";
 let memoryItems = [];
-let recoveryUrl = localStorage.getItem("aura.recovery.url") || "";
+let recoveryUrl = safeStorage.get("aura.recovery.url") || "";
 let recoveryToken = "";
 let recoveryDevices = [];
 
@@ -464,7 +469,7 @@ function renderGuardPanel(status = "Connect to the deployed AURA Recovery API.")
       if (nextToken.length < 32) throw new Error("Account token must contain at least 32 characters.");
       recoveryUrl = nextUrl;
       recoveryToken = nextToken;
-      localStorage.setItem("aura.recovery.url", recoveryUrl);
+      safeStorage.set("aura.recovery.url", recoveryUrl);
       const result = await invoke("recovery_list_devices", { baseUrl: recoveryUrl, accountToken: recoveryToken });
       recoveryDevices = Array.isArray(result.devices) ? result.devices : [];
       renderGuardPanel("Connected · " + recoveryDevices.length + " registered devices. Account token remains in memory only.");
@@ -576,7 +581,7 @@ function showPanel(view) {
     document.querySelector("#voice-status").textContent = voiceStatus;
     voiceToggle.addEventListener("change", () => {
       voiceOutputEnabled = voiceToggle.checked;
-      localStorage.setItem("aura.voice.output.enabled", String(voiceOutputEnabled));
+      safeStorage.set("aura.voice.output.enabled", String(voiceOutputEnabled));
       if (!voiceOutputEnabled && "speechSynthesis" in window) window.speechSynthesis.cancel();
       voiceStatus = voiceOutputEnabled ? "AURA will use an available local system voice only." : "Local voice output is off.";
       document.querySelector("#voice-status").textContent = voiceStatus;
@@ -593,8 +598,8 @@ function showPanel(view) {
         if (!["http:", "https:"].includes(whisperParsed.protocol) || !localHosts.includes(whisperParsed.hostname) || whisperParsed.username || whisperParsed.password || whisperParsed.search || whisperParsed.hash) throw new Error("Use a credential-free localhost whisper.cpp URL such as http://127.0.0.1:8081");
         endpoint = next.replace(/\/$/, "");
         whisperEndpoint = nextWhisper.replace(/\/$/, "");
-        localStorage.setItem("aura.inference.endpoint", endpoint);
-        localStorage.setItem("aura.voice.input.endpoint", whisperEndpoint);
+        safeStorage.set("aura.inference.endpoint", endpoint);
+        safeStorage.set("aura.voice.input.endpoint", whisperEndpoint);
         document.querySelector("#settings-result").textContent = "Endpoint saved.";
         await checkEngine();
       } catch (error) {
