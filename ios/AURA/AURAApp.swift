@@ -196,7 +196,10 @@ final class AuraAssistantModel: ObservableObject {
               base.host != nil, base.user == nil, base.password == nil else {
             throw NSError(domain: "AURA", code: 1, userInfo: [NSLocalizedDescriptionKey: "Enter a valid HTTP or HTTPS local inference URL."])
         }
-        return URL(string: clean + suffix)!
+        guard let url = URL(string: clean + suffix) else {
+            throw NSError(domain: "AURA", code: 5, userInfo: [NSLocalizedDescriptionKey: "The configured inference endpoint could not be formed."])
+        }
+        return url
     }
 
     func checkHealth() async {
