@@ -664,6 +664,7 @@ struct ContentView: View {
     @StateObject private var speech = AuraSpeechController()
     @StateObject private var speechOutput = AuraSpeechOutput()
     @AppStorage("aura.voice.output.enabled") private var voiceOutputEnabled = false
+    @AppStorage("aura.onboarding.completed") private var hasCompletedOnboarding = false
     @State private var pendingDevice: AuraRecoveryDevice?
     @State private var pendingCommand = ""
     @State private var pendingRevokeID: String?
@@ -704,6 +705,31 @@ struct ContentView: View {
             }
         }
         .task { await assistant.checkHealth() }
+        .sheet(isPresented: Binding(
+            get: { !hasCompletedOnboarding },
+            set: { if !$0 { hasCompletedOnboarding = true } }
+        )) {
+            VStack(spacing: 18) {
+                ZStack {
+                    Circle().fill(Color.purple.opacity(0.22)).frame(width: 104, height: 104)
+                    Image(systemName: "sparkles").font(.system(size: 46, weight: .medium)).foregroundStyle(Color(red: 0.78, green: 0.65, blue: 1))
+                }
+                Text("Welcome to AURA").font(.system(size: 28, weight: .bold, design: .rounded))
+                Text("Your private AI companion").font(.headline).foregroundStyle(Color(red: 0.78, green: 0.65, blue: 1))
+                Text("AURA keeps your workspace focused on privacy. Connect a local inference engine in Settings to start chatting. Your iOS build currently connects to a model runtime you provide; it does not download the Android starter model.")
+                    .font(.subheadline).multilineTextAlignment(.center).foregroundStyle(.secondary).padding(.horizontal, 8)
+                Button {
+                    hasCompletedOnboarding = true
+                    selectedTab = 3
+                } label: {
+                    Text("Set up AURA").fontWeight(.semibold).frame(maxWidth: .infinity).padding(.vertical, 13)
+                }.buttonStyle(.borderedProminent).tint(Color(red: 0.48, green: 0.20, blue: 0.95))
+                Button("Explore first") { hasCompletedOnboarding = true }.foregroundStyle(.secondary)
+            }
+            .padding(28)
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
         .onChange(of: selectedTab) { value in
             if value != 0 && speech.isRecording { speech.stop() }
         }
