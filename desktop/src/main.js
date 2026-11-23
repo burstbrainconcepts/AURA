@@ -19,6 +19,10 @@ let voicePcmChunks = [];
 let voiceSampleCount = 0;
 let voiceRecording = false;
 let voiceTranscribing = false;
+let voiceSpeechDetected = false;
+let voiceLastSpeechAt = 0;
+let voiceStartedAt = 0;
+let voiceAutoStopPending = false;
 let voiceAutoSubmit = safeStorage.get("aura.voice.auto-submit") !== "false";
 let history = [];
 let busy = false;
@@ -412,13 +416,39 @@ async function toggleVoiceRecording() {
     voiceProcessor = voiceContext.createScriptProcessor(4096, 1, 1);
     voicePcmChunks = [];
     voiceSampleCount = 0;
+    voiceSpeechDetected = false;
+    voiceLastSpeechAt = 0;
+    voiceStartedAt = Date.now();
+    voiceAutoStopPending = false;
     voiceProcessor.onaudioprocess = (event) => {
       if (!voiceRecording) return;
       const input = event.inputBuffer.getChannelData(0);
       voicePcmChunks.push(new Float32Array(input));
       voiceSampleCount += input.length;
       event.outputBuffer.getChannelData(0).fill(0);
-      if (44 + voiceSampleCount * 2 >= 20 * 1024 * 1024) {
+
+      // Local voice-activity detection: stop after 1.8 seconds of silence,
+      // but only after actual speech has been detected. A 12-second guard
+      // prevents an unattended empty recording from running indefinitely.
+      let energy = 0;
+      for (let i = 0; i < input.length; i++) energy += input[i] * input[i];
+      const rms = Math.sqrt(energy / Math.max(1, input.length));
+      const now = Date.now();
+      if (rms >= 0.012) {
+        voiceSpeechDetected = true;
+        voiceLastSpeechAt = now;
+      } else if (voiceSpeechDetected && voiceLastSpeechAt && now - voiceLastSpeechAt >= 1800 && !voiceAutoStopPending) {
+        voiceAutoStopPending = true;
+        setVoiceInputStatus("Speech finished. Transcribing your request locally…");
+        void finishVoiceRecording(false);
+      } else if (!voiceSpeechDetected && now - voiceStartedAt >= 12000 && !voiceAutoStopPending) {
+        voiceAutoStopPending = true;
+        setVoiceInputStatus("No speech detected. Stopping microphone capture.");
+        void finishVoiceRecording(true);
+      }
+
+      if (44 + voiceSampleCount * 2 >= 20 * 1024 * 1024 && !voiceAutoStopPending) {
+        voiceAutoStopPending = true;
         setVoiceInputStatus("The recording reached the 20 MB limit. Transcribing now.");
         void finishVoiceRecording(false);
       }
