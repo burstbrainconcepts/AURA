@@ -844,7 +844,7 @@ class MainActivity : Activity() {
     }
 
     private fun buildSystemPrompt(): String {
-        val saved = memory.list().takeLast(8)
+        val saved = memory.list().takeLast(4)
         if (saved.isEmpty()) {
             return "You are AURA, a helpful and honest private assistant. Be clear, useful and safe. Never claim actions you have not performed."
         }
@@ -1123,15 +1123,15 @@ class MainActivity : Activity() {
         lastAssistantMessage = ""
         rememberButton.isEnabled = false
         conversation.add("User" to text)
-        while (conversation.size > 12) conversation.removeAt(0)
+        while (conversation.size > 8) conversation.removeAt(0)
         send.isEnabled = false
         input.isEnabled = false
         mic.isEnabled = false
         status.text = "OFFLINE AI • thinking..."
-        val prompt = (conversation.takeLast(8).joinToString("\n") { (role, message) -> "$role: $message" } + "\nAURA:").takeLast(6000)
+        val prompt = (conversation.takeLast(4).joinToString("\n") { (role, message) -> "$role: $message" } + "\nAURA:").takeLast(3200)
         executor.execute {
             try {
-                val answer = generateNative(buildSystemPrompt(), prompt, 256).trim()
+                val answer = generateNative(buildSystemPrompt(), prompt, 120).trim()
                 if (answer.isEmpty()) throw IllegalStateException("The model returned an empty response.")
                 conversation.add("AURA" to answer)
                 lastAssistantMessage = answer
