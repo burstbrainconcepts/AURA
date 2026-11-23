@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomUUID, randomBytes } from "node:crypto";
+import { createRateLimiter } from "./rate-limit.js";
 import { Pool } from "pg";
 import { createCommandEnvelope, CAPABILITIES, isCommandAllowlisted } from "@aura/core";
 import {
@@ -35,6 +36,14 @@ const REQUIRED_CAPABILITY = Object.freeze({
   "recovery.checkin": "device.recovery.queue"
 });
 const APPROVAL_REQUIRED = new Set(["device.lock", "location.refresh"]);
+const rateLimiters = new Map([
+  ["enrollment-challenge", createRateLimiter({ windowMs: 5 * 60_000, maxRequests: 12 })],
+  ["enrollment-complete", createRateLimiter({ windowMs: 5 * 60_000, maxRequests: 20 })],
+  ["account-command", createRateLimiter({ windowMs: 60_000, maxRequests: 30 })],
+  ["device-checkin", createRateLimiter({ windowMs: 60_000, maxRequests: 60 })],
+  ["device-command-poll", createRateLimiter({ windowMs: 60_000, maxRequests: 120 })],
+  ["device-command-ack", createRateLimiter({ windowMs: 60_000, maxRequests: 60 })]
+]);
 
 if (!DATABASE_URL) throw new Error("DATABASE_URL is required.");
 const pool = new Pool({ connectionString: DATABASE_URL, max: 10, idleTimeoutMillis: 30000 });
@@ -57,7 +66,10 @@ function send(res, status, payload) {
   res.writeHead(status, {
     "content-type": "application/json; charset=utf-8",
     "cache-control": "no-store",
-    "x-content-type-options": "nosniff"
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "DENY",
+    "referrer-policy": "no-referrer",
+    "permissions-policy": "camera=(), microphone=(), geolocation=()"
   });
   res.end(JSON.stringify(payload));
 }
@@ -109,6 +121,30 @@ async function audit(accountId, deviceId, eventType, metadata = {}) {
 async function route(req, res) {
   const url = new URL(req.url, "http://aura.internal");
   const path = url.pathname;
+  const remoteAddress = req.socket.remoteAddress || "unknown";
+  const rateLimitName =
+    req.method === "POST" && path === "/v1/enrollment/challenges" ? "enrollment-challenge" :
+    req.method === "POST" && path === "/v1/enrollment/complete" ? "enrollment-complete" :
+    req.method === "POST" && path === "/v1/commands" ? "account-command" :
+    req.method === "POST" && path === "/v1/device/checkin" ? "device-checkin" :
+    req.method === "GET" && path === "/v1/device/commands" ? "device-command-poll" :
+    req.method === "POST" && /^\\/v1\\/device\\/commands\\/[0-9a-f-]{36}\\/ack$/i.test(path) ? "device-command-ack" : null;
+  if (rateLimitName) {
+    const result = rateLimiters.get(rateLimitName)(remoteAddress);
+    if (!result.allowed) {
+      const retryAfter = Math.max(1, Math.ceil(result.retryAfterMs / 1000));
+      res.writeHead(429, {
+        "content-type": "application/json; charset=utf-8",
+        "cache-control": "no-store",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "no-referrer",
+        "retry-after": String(retryAfter)
+      });
+      res.end(JSON.stringify({ error: "rate_limit_exceeded", retryAfterSeconds: retryAfter }));
+      return;
+    }
+  }
 
   if (req.method === "GET" && CONSOLE_FILES[path]) {
     const [fileName, contentType] = CONSOLE_FILES[path];
