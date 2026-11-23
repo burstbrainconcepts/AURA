@@ -30,8 +30,7 @@ fi
 
 cmake -S "$UPSTREAM" -B "$BUILD" \
   -DCMAKE_BUILD_TYPE=Release \
-  -DWHISPER_BUILD_SERVER=ON \
-  -DWHISPER_FFMPEG=ON
+  -DWHISPER_BUILD_SERVER=ON
 cmake --build "$BUILD" --config Release --target whisper-server --parallel
 
 if [[ ! -f "$MODEL_PATH" ]]; then
