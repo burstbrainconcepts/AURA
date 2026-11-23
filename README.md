@@ -16,7 +16,8 @@
 - `recovery-console/` — browser-based device management console.
 - `android/` — native Android application and llama.cpp JNI integration.
 - `desktop/` — Tauri desktop application for Windows, macOS and Linux.
-- `ios/` — native SwiftUI application project for iPhone and iPad.
+- `ios/` — native SwiftUI application project for iPhone and iPad, including Siri/App Shortcuts and a generated branded AppIcon.
+- `docs/PRESENCE-MODE.md` — cross-platform summon, rest and visibility behavior, including OS permission boundaries.
 - `upstream/engines/` — approved third-party inference and voice engines, registered as pinned Git submodules.
 - `integrations/` — platform adapters around approved upstream components.
 - `audits/` — technical, licence and security reviews.
@@ -51,8 +52,8 @@
 
 - **Core:** passing. The latest workflow completed dependency installation, recovery-server JavaScript syntax checks, the full `npm test` workspace suite and the recovery API Docker image build.
 - **Desktop:** the latest Windows, macOS and Linux matrix builds all passed with the WAV voice-input integration. GitHub uploaded separate desktop bundle artifacts.
-- **iOS:** the SwiftUI simulator app compiled, packaged and uploaded successfully. This is an unsigned Simulator artifact, not a physical-device IPA.
-- **Android:** the native debug APK build passed. The workflow fetched the pinned llama.cpp revision, compiled the JNI/runtime and Kotlin app, verified the APK output, printed its SHA-256 digest and uploaded the `aura-android-debug` artifact.
+- **iOS:** the SwiftUI simulator app compiled, packaged and uploaded successfully after correcting the App Shortcut utterance. The AppIcon is generated during CI from a native Swift script. This is an unsigned Simulator artifact, not a physical-device IPA.
+- **Android:** the native debug APK build passed on the earlier Quick Settings revision. The optional floating AURA launcher and explicit overlay-permission flow are now implemented and awaiting the updated APK build result. The workflow fetches pinned llama.cpp source, compiles JNI/runtime and Kotlin app, verifies the APK, prints its SHA-256 digest and uploads the `aura-android-debug` artifact.
 
 The desktop app has native Rust localhost bridges for llama.cpp inference and whisper.cpp transcription, a passphrase-encrypted AES-256-GCM memory vault, optional local system voice output and authenticated Device Guard controls. Voice recordings are converted to mono WAV in memory, sent only to the configured localhost Whisper server, and inserted as editable text for review before sending. The iOS app has local llama.cpp HTTP chat, offline-capability-checked speech input, local speech output, Keychain-backed AES-GCM opt-in memory, device-bound Ed25519 self-enrollment and Guard controls. Android includes the in-process llama.cpp JNI runtime, verified starter-model download, offline voice, encrypted opt-in memory and signed recovery polling.
 
@@ -81,4 +82,4 @@ From a local Git clone, run `bash scripts/bootstrap-upstreams.sh` to register an
 
 AURA's product roadmap describes intended capabilities. Each platform adapter must inspect and report what the current device and deployment can actually provide. If a capability depends on an OS entitlement, developer agreement, enterprise/managed-device program, regional availability, hardware, or partner approval, record the requirement and pursue it during operationalization. Keep the interface and shared contract capable of representing approval-pending and deployment-specific states.
 
-See [Local inference setup](docs/LOCAL-INFERENCE-SETUP.md), [Architecture](docs/ARCHITECTURE.md), [Security boundaries](docs/SECURITY-BOUNDARIES.md), [Upstream manifest](UPSTREAM_MANIFEST.md) and [Third-party notices](THIRD_PARTY_NOTICES.md).
+See [Presence Mode](docs/PRESENCE-MODE.md), [Local inference setup](docs/LOCAL-INFERENCE-SETUP.md), [Architecture](docs/ARCHITECTURE.md), [Security boundaries](docs/SECURITY-BOUNDARIES.md), [Upstream manifest](UPSTREAM_MANIFEST.md) and [Third-party notices](THIRD_PARTY_NOTICES.md).
