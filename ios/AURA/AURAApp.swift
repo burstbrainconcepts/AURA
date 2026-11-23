@@ -745,8 +745,8 @@ struct ContentView: View {
             speechSilenceTask?.cancel()
             speechSilenceTask = Task { @MainActor in
                 try? await Task.sleep(nanoseconds: 1_700_000_000)
-                guard !Task.isCancelled, speech.isRecording else { return }
-                speech.stop()
+                guard !Task.isCancelled else { return }
+                if speech.isRecording { speech.stop() }
                 let spoken = speech.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
                 message = ""
                 if spoken.isEmpty { return }
