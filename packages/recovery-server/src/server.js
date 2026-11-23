@@ -130,7 +130,8 @@ async function route(req, res) {
     req.method === "GET" && path === "/v1/device/commands" ? "device-command-poll" :
     req.method === "POST" && /^\\/v1\\/device\\/commands\\/[0-9a-f-]{36}\\/ack$/i.test(path) ? "device-command-ack" : null;
   if (rateLimitName) {
-    const result = rateLimiters.get(rateLimitName)(remoteAddress);
+    const rateLimitIdentity = bearer(req) || "anonymous";
+    const result = rateLimiters.get(rateLimitName)(`${remoteAddress}:${sha256(rateLimitIdentity)}`);
     if (!result.allowed) {
       const retryAfter = Math.max(1, Math.ceil(result.retryAfterMs / 1000));
       res.writeHead(429, {
