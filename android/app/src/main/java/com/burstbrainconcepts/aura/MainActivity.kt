@@ -67,6 +67,9 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         memory = EncryptedMemoryStore(this)
         recovery = RemoteRecoveryClient(this)
+        // Initialize this view before building the rest of the interface so no
+        // early UI path can observe an uninitialized lateinit property.
+        overlayButton = Button(this)
         buildInterface()
         voice = OfflineVoiceController(
             this,
@@ -231,7 +234,7 @@ class MainActivity : Activity() {
         root.addView(heading)
         root.addView(status)
         root.addView(presenceButton)
-        overlayButton = Button(this).apply {
+        overlayButton.apply {
             text = if (getSharedPreferences("aura_presence", MODE_PRIVATE)
                 .getBoolean("floating_enabled", false)) {
                 "Dismiss floating AURA bubble"
