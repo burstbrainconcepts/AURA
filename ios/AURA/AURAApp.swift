@@ -267,8 +267,6 @@ final class AuraAssistantModel: ObservableObject {
     func clearConversation() { messages.removeAll() }
 }
 
-@main
-
 @MainActor
 final class AuraSpeechController: ObservableObject {
     @Published var isRecording = false
@@ -377,6 +375,7 @@ final class AuraSpeechOutput: ObservableObject {
     }
 }
 
+@main
 struct AURAApp: App {
     var body: some Scene {
         WindowGroup {
@@ -778,7 +777,7 @@ struct ContentView: View {
             }
             Section("Privacy") {
                 Text("Chat requests are sent to the local inference URL configured above. For a computer-hosted model, use its reachable local-network address and configure the inference server to accept connections from your phone. If you enable server API-key authentication, enter the key above; it is kept in memory only and is not written to app preferences.")
-                Text("Encrypted memory and recovery-service connection will be enabled after their native adapters are integrated.")
+                Text("Encrypted memory uses an opt-in Keychain-backed AES-GCM vault. AURA Guard connects to the configured recovery service; remote actions require explicit confirmation and an enrolled target device.")
             }
         }.scrollContentBackground(.hidden)
     }
