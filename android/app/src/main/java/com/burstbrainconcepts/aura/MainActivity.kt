@@ -572,8 +572,8 @@ class MainActivity : Activity() {
             }
         }
         showPage = { name -> selectPage(name) }
-        listOf("Home", "Chat", "Create", "Downloads", "Settings").forEach { name ->
-            val icon = when (name) { "Home" -> "⌂"; "Chat" -> "▢"; "Create" -> "✧"; "Downloads" -> "⇩"; else -> "⚙" }
+        listOf("Home", "Chat", "Downloads", "Notifications", "Settings").forEach { name ->
+            val icon = when (name) { "Home" -> "⌂"; "Chat" -> "▢"; "Downloads" -> "⇩"; "Notifications" -> "♧"; else -> "⚙" }
             val b = Button(this).apply {
                 text = "$icon\n$name"; isAllCaps = false; textSize = 9f
                 setTextColor(muted); background = rounded(0xFF160D2D.toInt(), 15f)
