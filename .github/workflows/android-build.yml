@@ -74,4 +74,4 @@ jobs:
           name: aura-android-debug
           path: android/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 90
