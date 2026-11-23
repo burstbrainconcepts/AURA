@@ -55,6 +55,8 @@ class MainActivity : Activity() {
     private var lastAssistantMessage = ""
     private var speakReplies = true
     private var pendingHandsFreeListen = false
+    private var pendingWakePrompt = ""
+    private lateinit var wakeButton: Button
     @Volatile private var pauseRequested = false
     @Volatile private var downloadInProgress = false
     private var downloadPaused = false
@@ -83,6 +85,7 @@ class MainActivity : Activity() {
         voice.initialize()
         speakToggle.text = "Voice replies: on"
         if (intent?.getBooleanExtra(EXTRA_START_LISTENING, false) == true) pendingHandsFreeListen = true
+        pendingWakePrompt = intent?.getStringExtra(EXTRA_VOICE_PROMPT).orEmpty()
         try {
             if (recovery.isEnrolled()) {
                 RecoveryWorkScheduler.ensureScheduled(this)
@@ -347,6 +350,9 @@ class MainActivity : Activity() {
             setOnClickListener { toggleFloatingAssistant() }
         }
         settings.addView(overlayButton)
+        wakeButton = actionButton(if (wakeListeningEnabled()) "Disable Hey AURA wake listening" else "Enable Hey AURA wake listening") { toggleWakeListening() }
+        settings.addView(wakeButton)
+        settings.addView(label("Optional hands-free wake phrase. Android shows a persistent microphone notification while listening.", 12f, muted))
         settings.addView(section("DEVICE SECURITY"))
         protectionButton = actionButton("Enable device lock") { requestDeviceAdmin() }
         lockButton = actionButton("Lock device now") { confirmDeviceLock() }.apply { isEnabled = false }
