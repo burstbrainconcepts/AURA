@@ -18,8 +18,6 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.ProgressBar
-import android.os.Handler
-import android.os.Looper
 import java.io.File
 import java.io.FileInputStream
 import java.io.RandomAccessFile
@@ -861,7 +859,6 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
-        try { unregisterReceiver(downloadReceiver) } catch (_: Exception) { }
         voice.shutdown()
         executor.shutdownNow()
         try { NativeLlama.nativeUnloadModel() } catch (_: UnsatisfiedLinkError) { }
