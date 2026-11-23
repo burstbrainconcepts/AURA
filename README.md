@@ -56,7 +56,7 @@
 
 The desktop app has a native Rust localhost inference bridge, passphrase-encrypted AES-256-GCM memory vault, optional local system voice output and authenticated Device Guard controls. The iOS app has local llama.cpp HTTP chat, offline-capability-checked speech input, local speech output, Keychain-backed AES-GCM opt-in memory and Guard controls. Android includes the in-process llama.cpp JNI runtime, verified starter-model download, offline voice, encrypted opt-in memory and signed recovery polling.
 
-**Not yet end-to-end verified:** physical-device installation and testing on each platform (the Android debug APK is CI-built but has not yet been tested on a physical phone); iPhone-native enrollment and on-device model execution; desktop speech input; live recovery API deployment and multi-device recovery drills; cross-device memory sync; and production signing/distribution. These are distinct from the passing CI builds. Platform approvals and signing requirements must be checked against the actual release configuration at operationalization.
+**Not yet end-to-end verified:** physical-device installation and testing on each platform (the Android debug APK is CI-built but has not yet been tested on a physical phone); iPhone-native recovery enrollment (now implemented but not yet physical-device tested), on-device model execution; desktop speech input; live recovery API deployment and multi-device recovery drills; cross-device memory sync; and production signing/distribution. These are distinct from the passing CI builds. Platform approvals and signing requirements must be checked against the actual release configuration at operationalization.
 
 Run workspace tests from a local clone:
 
