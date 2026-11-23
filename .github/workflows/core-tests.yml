@@ -17,13 +17,22 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
       - run: npm install --ignore-scripts
       - name: Validate application and setup-script syntax
-        run: node --check packages/recovery-server/src/server.js && node --check packages/recovery-server/src/security.js && node --check packages/recovery-server/src/rate-limit.js && node --check packages/recovery-server/src/migrate.js && node --check recovery-console/app.js && bash -n scripts/setup-whisper-server.sh
+        run: |
+          node --check packages/recovery-server/src/server.js
+          node --check packages/recovery-server/src/security.js
+          node --check packages/recovery-server/src/rate-limit.js
+          node --check packages/recovery-server/src/migrate.js
+          node --check recovery-console/app.js
+          bash -n scripts/setup-whisper-server.sh
+          bash -n scripts/deploy-recovery-vps.sh
+      - name: Validate production Compose configuration
+        run: docker compose --env-file deploy/recovery/production.env.example -f docker-compose.production.yml config --quiet
       - run: npm test
       - name: Build recovery API container
         run: docker build -t aura-recovery:ci .

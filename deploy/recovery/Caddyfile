@@ -1,0 +1,11 @@
+{$AURA_DOMAIN} {
+    tls {$AURA_ACME_EMAIL}
+    encode zstd gzip
+
+    log {
+        output stdout
+        format json
+    }
+
+    reverse_proxy recovery:8787
+}

@@ -8,6 +8,7 @@
 *.pem
 *.key
 secrets/
+/backups/
 
 # Build outputs
 .gradle/

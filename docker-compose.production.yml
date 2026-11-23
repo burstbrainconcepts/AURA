@@ -1,0 +1,67 @@
+services:
+  database:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: aura_recovery
+      POSTGRES_USER: aura_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - aura_recovery_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aura_user -d aura_recovery"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+    networks: [aura-backend]
+
+  recovery:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      database:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://aura_user:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@database:5432/aura_recovery
+      AURA_COMMAND_PRIVATE_KEY_B64: ${AURA_COMMAND_PRIVATE_KEY_B64:?Set AURA_COMMAND_PRIVATE_KEY_B64 in .env}
+      AURA_BOOTSTRAP_ACCOUNT_ID: ${AURA_BOOTSTRAP_ACCOUNT_ID:?Set AURA_BOOTSTRAP_ACCOUNT_ID in .env}
+      AURA_BOOTSTRAP_ACCOUNT_TOKEN: ${AURA_BOOTSTRAP_ACCOUNT_TOKEN:?Set AURA_BOOTSTRAP_ACCOUNT_TOKEN in .env}
+      PORT: "8787"
+    expose: ["8787"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8787/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    restart: unless-stopped
+    networks: [aura-backend]
+
+  caddy:
+    image: caddy:2-alpine
+    environment:
+      AURA_DOMAIN: ${AURA_DOMAIN:?Set AURA_DOMAIN in .env}
+      AURA_ACME_EMAIL: ${AURA_ACME_EMAIL:?Set AURA_ACME_EMAIL in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/recovery/Caddyfile:/etc/caddy/Caddyfile:ro
+      - aura_caddy_data:/data
+      - aura_caddy_config:/config
+    depends_on:
+      recovery:
+        condition: service_healthy
+    restart: unless-stopped
+    networks: [aura-backend]
+
+volumes:
+  aura_recovery_data:
+  aura_caddy_data:
+  aura_caddy_config:
+
+networks:
+  aura-backend:
+    driver: bridge

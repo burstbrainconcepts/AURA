@@ -90,3 +90,15 @@ All command signatures cover a canonical envelope containing the version, comman
 The Android app includes device-key enrollment, encrypted device credentials, server-signature verification, replay protection, WorkManager polling, lock execution and consented location refresh. The iOS app can enroll itself with a device-bound Ed25519 key but currently advertises no remote-action capabilities. The browser console includes account-scoped command and audit history and is served at `/console`.
 
 **Verification:** the Android cloud debug-APK build has passed and its artifact has been uploaded. The recovery API syntax checks and Docker image build have also passed. Physical-device installation, enrollment and command execution against a live Android device remain to be tested. The API has not yet been deployed to a live host with PostgreSQL, HTTPS and production secrets. At deployment, verify the actual device permissions, management configuration, platform agreements and service policies for the selected release; do not infer permanent platform limitations from this development build.
+
+## Self-hosted VPS deployment
+
+A production Compose stack is provided for a Linux VPS. PostgreSQL and the API stay on a private Docker network; only Caddy is published on TCP 80/443. Caddy obtains and renews the HTTPS certificate. The raw API port and database port are not published to the host.
+
+1. Point an A/AAAA DNS record for your API hostname to the VPS and allow inbound TCP 80/443 (UDP 443 is optional for HTTP/3).
+2. Install Docker Engine with the Compose v2 plugin.
+3. Run `bash scripts/bootstrap-recovery-secrets.sh` if you do not already have a private root `.env`.
+4. Add `AURA_DOMAIN=api.yourdomain.com` (hostname only) and `AURA_ACME_EMAIL=ops@yourdomain.com` to the Git-ignored `.env`.
+5. Run `bash scripts/deploy-recovery-vps.sh`. It validates Compose, builds and starts the stack, then checks the public HTTPS health endpoint.
+
+The production stack is `docker-compose.production.yml`; the local-development stack remains `docker-compose.recovery.yml`. Do not publish ports 8787 or 5432, and do not commit `.env`, the private signing key or account token. The API rate limiter is per-process defense-in-depth; apply additional edge/WAF rate limits if your hosting provider supports them.
