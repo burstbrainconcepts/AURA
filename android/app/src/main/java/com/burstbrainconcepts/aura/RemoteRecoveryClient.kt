@@ -31,6 +31,19 @@ class RemoteRecoveryClient(context: Context) {
     private val store = EncryptedRecoveryStore(app)
     private val deviceAdmin = ComponentName(app, AuraDeviceAdminReceiver::class.java)
 
+    private fun ensureEd25519Available() {
+        try {
+            KeyPairGenerator.getInstance("Ed25519")
+            KeyFactory.getInstance("Ed25519")
+            Signature.getInstance("Ed25519")
+        } catch (error: Exception) {
+            throw IllegalStateException(
+                "Ed25519 is not available from this device's current security providers. Recovery enrollment and command verification remain unavailable until a supported provider or platform configuration is available.",
+                error
+            )
+        }
+    }
+
     fun isEnrolled(): Boolean {
         val config = store.read()
         return config.optString("deviceToken").isNotBlank() && config.optString("serverUrl").isNotBlank() && config.optString("commandServerPublicKeyPem").isNotBlank()
@@ -60,7 +73,7 @@ class RemoteRecoveryClient(context: Context) {
     }
 
     fun enroll(serverUrl: String, accountToken: String, label: String = "Android device"): String {
-        require(Build.VERSION.SDK_INT >= 33) { "This Android version does not provide the required Ed25519 provider." }
+        ensureEd25519Available()
         val base = normalizeServerUrl(serverUrl)
         require(accountToken.length >= 32) { "Account token must contain at least 32 characters." }
 
@@ -118,7 +131,7 @@ class RemoteRecoveryClient(context: Context) {
     }
 
     fun pollAndExecute(): Int {
-        require(Build.VERSION.SDK_INT >= 33) { "Ed25519 verification requires Android 13 or later." }
+        ensureEd25519Available()
         val config = store.read()
         val base = normalizeServerUrl(config.optString("serverUrl"))
         val token = config.optString("deviceToken")
