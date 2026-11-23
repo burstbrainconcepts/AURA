@@ -589,7 +589,10 @@ final class AuraRecoveryModel: ObservableObject {
             throw NSError(domain: "AURA.Recovery", code: 1, userInfo: [NSLocalizedDescriptionKey: "Use an HTTPS recovery URL. HTTP is allowed only for localhost development."])
         }
         guard !path.contains("..") else { throw NSError(domain: "AURA.Recovery", code: 2) }
-        var request = URLRequest(url: URL(string: clean + path)!)
+        guard let requestURL = URL(string: clean + path) else {
+            throw NSError(domain: "AURA.Recovery", code: 4, userInfo: [NSLocalizedDescriptionKey: "The recovery request URL could not be formed."])
+        }
+        var request = URLRequest(url: requestURL)
         request.httpMethod = method
         request.timeoutInterval = 20
         request.setValue("application/json", forHTTPHeaderField: "Accept")
