@@ -707,6 +707,8 @@ struct ContentView: View {
                     memory.tag(3).tabItem { Label("Memory", systemImage: "lock.shield") }
                     guardView.tag(4).tabItem { Label("Guard", systemImage: "shield.lefthalf.filled") }
                     settings.tag(5).tabItem { Label("Settings", systemImage: "slider.horizontal.3") }
+                    voiceWorkspace.tag(6).tabItem { Label("Voice", systemImage: "waveform") }
+                    toolsWorkspace.tag(7).tabItem { Label("Create", systemImage: "wand.and.stars") }
                 }.tint(Color(red: 0.78, green: 0.65, blue: 1))
             }
         }
@@ -812,6 +814,67 @@ struct ContentView: View {
             let savedItems = memoryVault.enabled ? memoryVault.items : []
             await assistant.send(spoken, savedMemory: savedItems)
         }
+    }
+
+    private var voiceWorkspace: some View {
+        VStack(spacing: 22) {
+            Text("AURA Voice").font(.system(size: 28, weight: .semibold, design: .rounded))
+            Text("Speak naturally. Your voice stays on this device when on-device recognition is available.")
+                .font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
+            Spacer()
+            ZStack {
+                Circle().fill(Color.purple.opacity(0.10)).frame(width: 250, height: 250)
+                Circle().stroke(Color.purple.opacity(0.35), lineWidth: 1).frame(width: 210, height: 210)
+                Circle().fill(RadialGradient(colors: [Color.purple.opacity(0.75), Color(red: 0.13, green: 0.04, blue: 0.27)], center: .center, startRadius: 8, endRadius: 112))
+                    .frame(width: 164, height: 164).shadow(color: .purple.opacity(0.55), radius: 24)
+                Image(systemName: speech.isRecording ? "waveform" : "sparkles")
+                    .font(.system(size: 54, weight: .light)).foregroundStyle(.white)
+            }
+            Text(speech.isRecording ? "I'm listening…" : "Ready when you are")
+                .font(.title3.weight(.semibold))
+            Text(speech.transcript.isEmpty ? speech.status : speech.transcript)
+                .font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center).frame(minHeight: 48)
+            Button {
+                if speech.isRecording { speech.stop() } else { speech.start() }
+            } label: {
+                Label(speech.isRecording ? "Stop listening" : "Start listening", systemImage: speech.isRecording ? "stop.fill" : "mic.fill")
+                    .frame(maxWidth: .infinity).padding(.vertical, 14)
+            }.buttonStyle(.borderedProminent).tint(Color(red: 0.48, green: 0.20, blue: 0.95))
+            Text("Use Hey AURA through Siri Shortcuts to launch supported voice actions.")
+                .font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
+            Spacer()
+        }.padding(24)
+    }
+
+    private var toolsWorkspace: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Create with AURA").font(.system(size: 28, weight: .semibold, design: .rounded))
+            Text("Choose a workspace. AURA will open a chat with your task ready.")
+                .font(.subheadline).foregroundStyle(.secondary)
+            let tools: [(String, String, String)] = [
+                ("Write & edit", "doc.text", "Help me write and edit: "),
+                ("Summarize", "text.alignleft", "Summarize this: "),
+                ("Translate", "character.bubble", "Translate this text: "),
+                ("Code assistant", "chevron.left.forwardslash.chevron.right", "Help me write or debug code: "),
+                ("Brainstorm", "lightbulb", "Brainstorm ideas for: "),
+                ("Plan a project", "calendar", "Help me plan this project: ")
+            ]
+            ForEach(tools, id: \.0) { item in
+                Button {
+                    message = item.2
+                    selectedTab = 0
+                } label: {
+                    HStack(spacing: 14) {
+                        Image(systemName: item.1).font(.title3).foregroundStyle(Color(red: 0.78, green: 0.65, blue: 1))
+                            .frame(width: 42, height: 42).background(.purple.opacity(0.16), in: RoundedRectangle(cornerRadius: 12))
+                        Text(item.0).font(.headline)
+                        Spacer()
+                        Image(systemName: "chevron.right").foregroundStyle(.secondary)
+                    }.padding(14).background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 16))
+                }.buttonStyle(.plain)
+            }
+            Spacer()
+        }.padding(22)
     }
 
     private var assistantView: some View {
