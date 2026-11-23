@@ -674,12 +674,15 @@ struct ContentView: View {
             VStack(spacing: 0) {
                 HStack(spacing: 12) {
                     ZStack {
-                        RoundedRectangle(cornerRadius: 13).fill(LinearGradient(colors: [.indigo, Color(red: 0.12, green: 0.2, blue: 0.42)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                        Text("A").font(.system(size: 22, weight: .semibold, design: .rounded)).foregroundStyle(.white)
-                    }.frame(width: 42, height: 42)
+                        RoundedRectangle(cornerRadius: 13).fill(Color(red: 0.035, green: 0.045, blue: 0.11))
+                        Circle().stroke(Color(red: 0.53, green: 0.23, blue: 1).opacity(0.65), lineWidth: 1).padding(5)
+                        Ellipse().stroke(LinearGradient(colors: [Color(red: 0.78, green: 0.55, blue: 1), Color(red: 0.42, green: 0.18, blue: 0.95)], startPoint: .top, endPoint: .bottom), lineWidth: 3).frame(width: 17, height: 33).rotationEffect(.degrees(32))
+                        Ellipse().stroke(LinearGradient(colors: [Color(red: 0.55, green: 1, blue: 1), Color(red: 0.05, green: 0.72, blue: 0.9)], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 3).frame(width: 34, height: 15).rotationEffect(.degrees(-25))
+                        Circle().fill(Color.white).frame(width: 5, height: 5).shadow(color: .purple, radius: 7)
+                    }.frame(width: 42, height: 42).shadow(color: Color.purple.opacity(0.28), radius: 10)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("AURA").font(.system(size: 16, weight: .bold, design: .rounded)).tracking(3)
-                        Text("PRIVATE INTELLIGENCE").font(.system(size: 8, weight: .semibold)).tracking(1.7).foregroundStyle(.blue.opacity(0.8))
+                        Text("PRIVATE AI COMPANION").font(.system(size: 8, weight: .semibold)).tracking(1.7).foregroundStyle(.purple.opacity(0.9))
                     }
                     Spacer()
                     Circle().fill(assistant.engineOnline ? .green : .orange).frame(width: 7, height: 7)
@@ -748,7 +751,7 @@ struct ContentView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Think clearly.").font(.system(size: 29, weight: .semibold, design: .rounded))
-                    Text("Move confidently.").font(.system(size: 22, weight: .medium, design: .rounded)).foregroundStyle(.blue.opacity(0.85))
+                    Text("Move confidently.").font(.system(size: 22, weight: .medium, design: .rounded)).foregroundStyle(.cyan.opacity(0.9))
                 }
                 Spacer()
                 Button { assistant.clearConversation() } label: {
@@ -788,7 +791,7 @@ struct ContentView: View {
                     message = ""
                     Task { await assistant.send(value, savedMemory: memoryVault.enabled ? memoryVault.items : []) }
                 } label: {
-                    Image(systemName: "arrow.up").font(.headline).foregroundStyle(.white).frame(width: 45, height: 45).background(Color.indigo, in: RoundedRectangle(cornerRadius: 13))
+                    Image(systemName: "arrow.up").font(.headline).foregroundStyle(.white).frame(width: 45, height: 45).background(Color(red: 0.53, green: 0.23, blue: 1), in: RoundedRectangle(cornerRadius: 13))
                 }.disabled(assistant.isBusy || message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }.padding(.bottom, 8)
         }.padding(.horizontal, 22)
