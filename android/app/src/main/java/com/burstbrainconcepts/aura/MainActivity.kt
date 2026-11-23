@@ -2,18 +2,14 @@ package com.burstbrainconcepts.aura
 
 import android.app.Activity
 import android.app.AlertDialog
-import android.app.DownloadManager
 import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
-import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.provider.Settings
 import android.os.Build
 import android.os.Bundle
-import android.os.Environment
 import android.text.InputType
 import android.view.ViewGroup
 import android.widget.Button
@@ -21,8 +17,14 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.ProgressBar
+import android.os.Handler
+import android.os.Looper
 import java.io.File
 import java.io.FileInputStream
+import java.io.RandomAccessFile
+import java.net.HttpURLConnection
+import java.net.URL
 import java.security.MessageDigest
 import java.util.concurrent.Executors
 
@@ -34,6 +36,8 @@ class MainActivity : Activity() {
     private lateinit var input: EditText
     private lateinit var send: Button
     private lateinit var download: Button
+    private lateinit var pauseDownload: Button
+    private lateinit var downloadProgress: ProgressBar
     private lateinit var protectionButton: Button
     private lateinit var lockButton: Button
     private lateinit var mic: Button
@@ -49,7 +53,9 @@ class MainActivity : Activity() {
     private var lastUserMessage = ""
     private var lastAssistantMessage = ""
     private var speakReplies = false
-    private var activeDownloadId = -1L
+    @Volatile private var pauseRequested = false
+    @Volatile private var downloadInProgress = false
+    private var downloadPaused = false
     private var modelReady = false
     private var pendingLocationSettings = false
 
@@ -58,24 +64,8 @@ class MainActivity : Activity() {
         private const val REQUEST_LOCATION_PERMISSION = 7412
     }
 
-    private val downloadReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) {
-            if (intent?.action == DownloadManager.ACTION_DOWNLOAD_COMPLETE) {
-                val id = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L)
-                if (id == activeDownloadId) verifyAndLoadModel(id)
-            }
-        }
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val filter = IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE)
-        if (Build.VERSION.SDK_INT >= 33) {
-            registerReceiver(downloadReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
-        } else {
-            @Suppress("DEPRECATION")
-            registerReceiver(downloadReceiver, filter)
-        }
         memory = EncryptedMemoryStore(this)
         recovery = RemoteRecoveryClient(this)
         buildInterface()
@@ -95,12 +85,7 @@ class MainActivity : Activity() {
             status.text = "Recovery credentials need attention: ${error.message ?: "storage error"}"
         }
 
-        val savedDownloadId = getSharedPreferences("aura_downloads", MODE_PRIVATE)
-            .getLong("model_download_id", -1L)
-        if (savedDownloadId >= 0) {
-            activeDownloadId = savedDownloadId
-            resumeOrCheckDownload(savedDownloadId)
-        } else if (modelFile().exists()) {
+        if (modelFile().exists()) {
             status.text = "Checking downloaded offline model..."
             verifyAndLoadModel(-1L)
         } else {
@@ -130,7 +115,17 @@ class MainActivity : Activity() {
         }
         download = Button(this).apply {
             text = "Download starter AI model (about 398 MB)"
-            setOnClickListener { confirmModelDownload() }
+            setOnClickListener { if (downloadPaused) continueModelDownload() else confirmModelDownload() }
+        }
+        downloadProgress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
+            max = 1000
+            progress = 0
+            visibility = ViewGroup.GONE
+        }
+        pauseDownload = Button(this).apply {
+            text = "Pause download"
+            visibility = ViewGroup.GONE
+            setOnClickListener { pauseModelDownload() }
         }
         val deviceControls = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -221,6 +216,8 @@ class MainActivity : Activity() {
         root.addView(heading)
         root.addView(status)
         root.addView(download)
+        root.addView(downloadProgress)
+        root.addView(pauseDownload)
         root.addView(deviceControls)
         root.addView(memoryControls)
         root.addView(recoveryControls)
