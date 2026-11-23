@@ -44,6 +44,8 @@ class RemoteRecoveryClient(context: Context) {
         }
     }
 
+    fun isEd25519Available(): Boolean = try { ensureEd25519Available(); true } catch (_: Exception) { false }
+
     fun isEnrolled(): Boolean {
         val config = store.read()
         return config.optString("deviceToken").isNotBlank() && config.optString("serverUrl").isNotBlank() && config.optString("commandServerPublicKeyPem").isNotBlank()
