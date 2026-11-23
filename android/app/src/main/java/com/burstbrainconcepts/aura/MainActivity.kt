@@ -87,7 +87,7 @@ class MainActivity : Activity() {
 
         if (modelFile().exists()) {
             status.text = "Checking downloaded offline model..."
-            verifyAndLoadModel(-1L)
+            loadExistingModel()
         } else if (partialModelFile().exists() && partialModelFile().length() > 0) {
             downloadPaused = true
             download.text = "Continue download"
@@ -602,8 +602,9 @@ class MainActivity : Activity() {
     private fun downloadModelResumably() {
         val partial = partialModelFile()
         var retryCount = 0
+        var totalBytes = ModelCatalog.EXPECTED_BYTES
         try {
-            while (partial.length() < ModelCatalog.EXPECTED_BYTES && !pauseRequested) {
+            while (partial.length() < totalBytes && !pauseRequested) {
                 var connection: HttpURLConnection? = null
                 try {
                     val offset = partial.length()
@@ -626,6 +627,7 @@ class MainActivity : Activity() {
                     } else {
                         connection.contentLengthLong.takeIf { it > 0 } ?: ModelCatalog.EXPECTED_BYTES
                     }
+                    totalBytes = total
                     RandomAccessFile(partial, "rw").use { output ->
                         if (!append) output.setLength(0)
                         output.seek(startAt)
@@ -675,12 +677,20 @@ class MainActivity : Activity() {
             if (partial.length() < 300_000_000L) throw java.io.IOException("The model download is incomplete.")
             runOnUiThread { status.text = "Download complete • verifying file integrity…" }
             val digest = MessageDigest.getInstance("SHA-256")
+            var verifiedBytes = 0L
+            val fileBytes = partial.length().coerceAtLeast(1L)
             FileInputStream(partial).use { stream ->
                 val buffer = ByteArray(1024 * 1024)
                 while (true) {
                     val count = stream.read(buffer)
                     if (count < 0) break
                     digest.update(buffer, 0, count)
+                    verifiedBytes += count
+                    val percent = ((verifiedBytes * 1000L) / fileBytes).coerceIn(0L, 1000L).toInt()
+                    runOnUiThread {
+                        downloadProgress.progress = percent
+                        status.text = "Verifying model integrity • ${percent / 10}%"
+                    }
                 }
             }
             val actual = digest.digest().joinToString("") { "%02x".format(it) }
@@ -692,8 +702,12 @@ class MainActivity : Activity() {
                 partial.copyTo(modelFile(), overwrite = true)
                 partial.delete()
             }
-            runOnUiThread { status.text = "Model verified • loading local AI engine…" }
+            runOnUiThread {
+                downloadProgress.isIndeterminate = true
+                status.text = "Model verified • loading local AI engine…"
+            }
             val loaded = loadNativeModel(modelFile().absolutePath)
+            runOnUiThread { downloadProgress.isIndeterminate = false }
             if (!loaded) throw IllegalStateException("The native AI engine could not load the model.")
             modelReady = true
             downloadInProgress = false
@@ -719,6 +733,54 @@ class MainActivity : Activity() {
                 downloadPaused = partial.exists() && partial.length() > 0
                 pauseDownload.visibility = ViewGroup.GONE
                 status.text = "Model setup paused safely: ${error.message ?: "network or setup error"}"
+            }
+        }
+    }
+
+    private fun loadExistingModel() {
+        download.isEnabled = false
+        downloadProgress.visibility = ViewGroup.VISIBLE
+        status.text = "Checking installed AI model…"
+        executor.execute {
+            try {
+                val file = modelFile()
+                val digest = MessageDigest.getInstance("SHA-256")
+                FileInputStream(file).use { stream ->
+                    val buffer = ByteArray(1024 * 1024)
+                    while (true) {
+                        val count = stream.read(buffer)
+                        if (count < 0) break
+                        digest.update(buffer, 0, count)
+                    }
+                }
+                val actual = digest.digest().joinToString("") { "%02x".format(it) }
+                if (!actual.equals(ModelCatalog.SHA256, ignoreCase = true)) {
+                    file.delete()
+                    throw IllegalStateException("Installed model failed integrity verification. Download it again.")
+                }
+                runOnUiThread {
+                    downloadProgress.isIndeterminate = true
+                    status.text = "Model verified • preparing local AI engine…"
+                }
+                if (!loadNativeModel(file.absolutePath)) throw IllegalStateException("The native AI engine could not load the model.")
+                modelReady = true
+                runOnUiThread {
+                    downloadProgress.isIndeterminate = false
+                    downloadProgress.visibility = ViewGroup.GONE
+                    download.text = "Model installed ✓"
+                    status.text = "OFFLINE AI READY • Qwen 0.5B • CPU mode"
+                    input.isEnabled = true
+                    send.isEnabled = true
+                    mic.isEnabled = voice.isOnDeviceRecognitionAvailable()
+                    speakToggle.isEnabled = true
+                }
+            } catch (error: Exception) {
+                runOnUiThread {
+                    downloadProgress.isIndeterminate = false
+                    downloadProgress.visibility = ViewGroup.GONE
+                    download.isEnabled = true
+                    status.text = "Model setup required: ${error.message ?: "verification or load failed"}"
+                }
             }
         }
     }
