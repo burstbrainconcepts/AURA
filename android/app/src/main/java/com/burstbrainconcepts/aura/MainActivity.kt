@@ -470,9 +470,13 @@ class MainActivity : Activity() {
             navigation.setPadding(7, 7, 7, bottomInset + (8 * density).toInt())
             insets
         }
-        setContentView(root)
+        val shell = FrameLayout(this).apply {
+            setBackgroundColor(ink)
+            addView(root, FrameLayout.LayoutParams(-1, -1))
+        }
+        setContentView(shell)
         selectPage("Home")
-        showBrandedSplash(root, ink, lavender, white, muted)
+        showBrandedSplash(shell, ink, lavender, white, muted)
         updateDeviceAdminControls()
         updateLocationButton()
     }
