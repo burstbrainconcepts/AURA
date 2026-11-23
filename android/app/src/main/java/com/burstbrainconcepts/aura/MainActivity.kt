@@ -85,9 +85,36 @@ class MainActivity : Activity() {
         buildInterface()
         voice = OfflineVoiceController(
             this,
-            { spoken -> runOnUiThread { input.setText(spoken); if (spoken.isNotBlank()) sendMessage() } },
+            { spoken ->
+                runOnUiThread {
+                    when (spoken.trim().lowercase().removeSuffix(".").removeSuffix("!")) {
+                        "be quiet", "stop speaking", "silence" -> {
+                            voice.stopSpeaking()
+                            status.text = "AURA voice output stopped."
+                            resumeWakeListening()
+                        }
+                        "continue listening", "listen again" -> {
+                            status.text = "AURA is listening again."
+                            voice.startListening()
+                        }
+                        "go to sleep", "end conversation", "stop conversation", "goodbye aura" -> {
+                            conversation.clear()
+                            transcript.text = "AURA is resting. Say Hey AURA when wake listening is enabled."
+                            voice.stopSpeaking()
+                            resumeWakeListening()
+                        }
+                        else -> {
+                            input.setText(spoken)
+                            if (spoken.isNotBlank()) sendMessage()
+                        }
+                    }
+                }
+            },
             { message -> runOnUiThread { status.text = message } },
-            { runOnUiThread { status.text = "No speech detected. Returning to wake-word standby." } }
+            { runOnUiThread {
+                status.text = "No speech detected. Returning to wake-word standby."
+                resumeWakeListening()
+            } }
         )
         voice.initialize()
         speakToggle.text = "Voice replies: on"
