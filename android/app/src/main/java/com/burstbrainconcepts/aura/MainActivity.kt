@@ -520,6 +520,13 @@ class MainActivity : Activity() {
         profileText.addView(text("AURA • Personal assistant", 11f, greyText))
         profileRow.addView(profileText)
         profile.addView(profileRow)
+        profile.setOnClickListener {
+            AlertDialog.Builder(this@MainActivity)
+                .setTitle("AURA profile")
+                .setMessage("Ephraim Hosea\\nPersonal assistant\\n\\nYour conversations and optional encrypted memory stay on this device unless you explicitly configure a remote service.")
+                .setPositiveButton("Close", null)
+                .show()
+        }
         settings.addView(profile)
         settings.addView(section("AI & MODELS", greyText))
         settings.addView(button("⬡  Manage AI models  ›") { showPage("Downloads") })
@@ -591,7 +598,7 @@ class MainActivity : Activity() {
             val density = resources.displayMetrics.density
             val topInset = if (Build.VERSION.SDK_INT >= 30) insets.getInsets(android.view.WindowInsets.Type.statusBars()).top else insets.systemWindowInsetTop
             val bottomInset = if (Build.VERSION.SDK_INT >= 30) insets.getInsets(android.view.WindowInsets.Type.navigationBars()).bottom else insets.systemWindowInsetBottom
-            view.setPadding(0, topInset + (8 * density).toInt(), 0, 0)
+            view.setPadding(0, topInset + (16 * density).toInt(), 0, 0)
             navigation.setPadding(7, 7, 7, bottomInset + (8 * density).toInt())
             insets
         }
