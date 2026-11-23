@@ -24,11 +24,13 @@ Open AURA Settings and configure the local endpoint if it differs from the defau
 
 ## Offline voice input
 
-Build whisper.cpp with its HTTP server, then start it with a downloaded multilingual speech model, for example:
+AURA includes a helper that initializes the repository's pinned whisper.cpp submodule, builds its HTTP server, downloads the multilingual `base` model if it is missing, and starts it on loopback:
 
 ```sh
-./build/bin/whisper-server -m ./models/ggml-base.bin -l auto --host 127.0.0.1 --port 8081
+bash scripts/setup-whisper-server.sh
 ```
+
+The helper requires Git, CMake, a C++ compiler, and the platform's native build tools. On Windows, run it from Git Bash or WSL with the corresponding C++ toolchain installed. Set `WHISPER_MODEL_NAME=small` for a larger model, `WHISPER_MODEL_PATH` to use an existing GGML model, or `WHISPER_PORT` to change the default port. The initial model download requires internet; transcription after the model is installed runs locally.
 
 AURA captures mono 16-bit PCM and wraps it in a WAV file locally, so the server does not need FFmpeg audio conversion. The multilingual `base` model supports both English and Hausa; use `-l auto` for automatic language detection or `-l ha` to force Hausa. In AURA Settings, set the whisper.cpp URL (default `http://127.0.0.1:8081`). In the Assistant, tap **Mic**, speak, tap **Stop**, review the transcript and then tap **Send**. Audio is sent only to the configured localhost endpoint and recordings are limited to 20 MB. Leaving the Assistant while recording discards the unfinished recording. The operating system may request microphone permission on first use.
 
