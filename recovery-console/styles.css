@@ -56,3 +56,15 @@ footer a { color: #b9aaff; white-space: nowrap; }
   .section-heading { align-items: flex-end; }
   footer { flex-direction: column; }
 }
+
+.activity-section { padding-top: 34px; }
+.activity-list { display: grid; gap: 9px; }
+.activity-item { display: grid; grid-template-columns: 1fr auto; gap: 5px 14px; padding: 14px 16px; border: 1px solid #2c3954; border-radius: 12px; background: rgba(19, 29, 48, .76); }
+.activity-item strong { font-size: 12px; text-transform: capitalize; }
+.activity-state { color: #b9aaff; font-size: 10px; text-align: right; }
+.activity-item p { grid-column: 1 / -1; margin: 0; }
+.activity-detail { color: #b8c5dc; font-size: 11px; overflow-wrap: anywhere; }
+@media (max-width: 520px) {
+  .activity-item { grid-template-columns: 1fr; }
+  .activity-state { text-align: left; }
+}
