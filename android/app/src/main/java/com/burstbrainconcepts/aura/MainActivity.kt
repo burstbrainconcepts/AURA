@@ -104,7 +104,10 @@ class MainActivity : Activity() {
             status.text = "Checking downloaded offline model..."
             verifyAndLoadModel(-1L)
         } else {
-            status.text = "Offline model not installed • download required once"
+            status.text = "AURA setup required • download the AI pack to continue"
+            // Keep the base install small. Ask before downloading the large model;
+            // the user can defer and start it later from the download button.
+            window.decorView.post { confirmModelDownload() }
         }
     }
 
