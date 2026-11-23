@@ -33,7 +33,7 @@ import java.util.concurrent.Executors
 class MainActivity : Activity() {
     private val executor = Executors.newSingleThreadExecutor()
     private val conversation = mutableListOf<Pair<String, String>>()
-    private lateinit var transcript: TextView
+    private lateinit var transcript: LinearLayout
     private lateinit var status: TextView
     private lateinit var input: EditText
     private lateinit var send: Button
@@ -99,7 +99,13 @@ class MainActivity : Activity() {
                         }
                         "go to sleep", "end conversation", "stop conversation", "goodbye aura" -> {
                             conversation.clear()
-                            transcript.text = "AURA is resting. Say Hey AURA when wake listening is enabled."
+                            transcript.removeAllViews()
+                            transcript.addView(TextView(this@MainActivity).apply {
+                                text = "AURA is resting. Say Hey AURA when wake listening is enabled."
+                                textSize = 14f
+                                setTextColor(0xFFBDB1CE.toInt())
+                                setPadding(18, 20, 18, 20)
+                            })
                             voice.stopSpeaking()
                             resumeWakeListening()
                         }
@@ -295,12 +301,16 @@ class MainActivity : Activity() {
         val chat = column()
         chat.addView(text("Chat with AURA", 23f, white, true))
         chat.addView(text("Your private conversation, stored on this device.", 12f, muted))
-        transcript = TextView(this).apply {
-            text = "Welcome to AURA. Download the starter model to begin chatting offline."
-            textSize = 14f
-            setTextColor(white)
-            setPadding(15, 16, 15, 16)
-            background = rounded(panel, 18f)
+        transcript = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(8, 12, 8, 18)
+            addView(TextView(this@MainActivity).apply {
+                text = "Welcome to AURA. Download the starter model to begin chatting offline."
+                textSize = 14f
+                setTextColor(muted)
+                setPadding(16, 18, 16, 18)
+                background = rounded(panel, 18f)
+            })
         }
         val transcriptScroll = ScrollView(this).apply {
             isFillViewport = true
@@ -1365,7 +1375,28 @@ class MainActivity : Activity() {
     }
 
     private fun append(speaker: String, text: String) {
-        transcript.append("\n$speaker\n$text\n")
+        val user = speaker.equals("You", ignoreCase = true)
+        val bubble = TextView(this).apply {
+            this.text = text
+            textSize = 14f
+            setTextColor(0xFFFFFCFF.toInt())
+            setPadding(16, 13, 16, 13)
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(if (user) 0xFF702BFF.toInt() else 0xFF261746.toInt())
+                cornerRadius = 20f * resources.displayMetrics.density
+            }
+            maxWidth = (resources.displayMetrics.widthPixels * .78f).toInt()
+        }
+        val line = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = if (user) android.view.Gravity.END else android.view.Gravity.START
+            setPadding(4, 6, 4, 6)
+            addView(bubble, LinearLayout.LayoutParams(-2, -2).apply {
+                leftMargin = if (user) 44 else 0
+                rightMargin = if (user) 0 else 44
+            })
+        }
+        transcript.addView(line)
     }
 
     @Deprecated("Use permission result API")
