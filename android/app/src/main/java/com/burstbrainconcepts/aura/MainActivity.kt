@@ -1031,13 +1031,13 @@ class MainActivity : Activity() {
                 pauseDownload.visibility = ViewGroup.GONE
                 status.text = "OFFLINE AI READY • Qwen 0.5B • CPU mode"
                 startHandsFreeListening()
-                submitWakePrompt()
                 download.text = "Model installed ✓"
                 download.isEnabled = false
                 input.isEnabled = true
                 send.isEnabled = true
                 mic.isEnabled = voice.isOnDeviceRecognitionAvailable()
                 speakToggle.isEnabled = true
+                submitWakePrompt()
                 append("AURA", "I'm ready. Your messages are processed locally on this device. Tap the microphone for on-device speech input or enable voice replies if an offline voice is installed.")
             }
         } catch (error: Exception) {
@@ -1085,10 +1085,10 @@ class MainActivity : Activity() {
                     download.text = "Model installed ✓"
                     status.text = "OFFLINE AI READY • Qwen 0.5B • CPU mode"
                     startHandsFreeListening()
-                    submitWakePrompt()
                     input.isEnabled = true
                     send.isEnabled = true
                     mic.isEnabled = voice.isOnDeviceRecognitionAvailable()
+                    submitWakePrompt()
                     speakToggle.isEnabled = true
                 }
             } catch (error: Exception) {
