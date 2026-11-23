@@ -18,6 +18,8 @@ jobs:
       - uses: actions/checkout@v5
       - name: Select Xcode
         run: xcodebuild -version
+      - name: Generate branded iOS app icon
+        run: swift ios/scripts/generate_app_icon.swift ios/AURA/Assets.xcassets/AppIcon.appiconset/AppIcon.png
       - name: Build iOS Simulator app
         run: |
           xcodebuild \
