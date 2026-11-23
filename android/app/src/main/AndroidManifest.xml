@@ -15,7 +15,7 @@
         android:roundIcon="@drawable/aura_launcher"
         android:allowBackup="false"
         android:label="AURA"
-        android:theme="@android:style/Theme.Material.Light.NoActionBar"
+        android:theme="@style/AuraTheme"
         android:usesCleartextTraffic="false">
         <activity
             android:name=".MainActivity"
