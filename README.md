@@ -42,7 +42,7 @@
 - `packages/recovery-server/` — PostgreSQL device registry, challenge-based enrollment, server-signed commands, acknowledgements, account-scoped command history, audit events and opt-in location check-ins.
 - `recovery-console/` — browser console for enrolled devices and user-confirmed recovery actions.
 - `android/` — native llama.cpp JNI runtime, verified small-model download, on-device voice, encrypted opt-in memory and recovery polling.
-- `desktop/` — Tauri desktop app with a native Rust bridge to a local llama.cpp server, passphrase-encrypted AES-256-GCM memory vault, optional local system voice output, Assistant, Memory, Device Guard and Settings views; native bundles are configured for Windows, macOS and Linux.
+- `desktop/` — Tauri desktop app with native Rust bridges to local llama.cpp and whisper.cpp, passphrase-encrypted AES-256-GCM memory vault, push-to-talk mono-WAV speech input, optional local system voice output, Assistant, Memory, Device Guard and Settings views; native bundles are configured for Windows, macOS and Linux. Run `scripts/setup-whisper-server.sh` to build a local multilingual speech server.
 - `ios/` — SwiftUI app with local llama.cpp chat, on-device speech recognition and TTS, Keychain-backed AES-GCM opt-in memory, Keychain-stored recovery account token, Guard device management and Settings, plus an Xcode project and simulator build workflow.
 
 ## Verification status
@@ -50,13 +50,13 @@
 **Verified CI results (23 November 2026):**
 
 - **Core:** passing. The latest workflow completed dependency installation, recovery-server JavaScript syntax checks, the full `npm test` workspace suite and the recovery API Docker image build.
-- **Desktop:** Windows, macOS and Linux matrix builds all passed. GitHub uploaded separate desktop bundle artifacts.
+- **Desktop:** the latest Windows, macOS and Linux matrix builds all passed with the WAV voice-input integration. GitHub uploaded separate desktop bundle artifacts.
 - **iOS:** the SwiftUI simulator app compiled, packaged and uploaded successfully. This is an unsigned Simulator artifact, not a physical-device IPA.
 - **Android:** the native debug APK build passed. The workflow fetched the pinned llama.cpp revision, compiled the JNI/runtime and Kotlin app, verified the APK output, printed its SHA-256 digest and uploaded the `aura-android-debug` artifact.
 
-The desktop app has a native Rust localhost inference bridge, passphrase-encrypted AES-256-GCM memory vault, optional local system voice output and authenticated Device Guard controls. The iOS app has local llama.cpp HTTP chat, offline-capability-checked speech input, local speech output, Keychain-backed AES-GCM opt-in memory, device-bound Ed25519 self-enrollment and Guard controls. Android includes the in-process llama.cpp JNI runtime, verified starter-model download, offline voice, encrypted opt-in memory and signed recovery polling.
+The desktop app has native Rust localhost bridges for llama.cpp inference and whisper.cpp transcription, a passphrase-encrypted AES-256-GCM memory vault, optional local system voice output and authenticated Device Guard controls. Voice recordings are converted to mono WAV in memory, sent only to the configured localhost Whisper server, and inserted as editable text for review before sending. The iOS app has local llama.cpp HTTP chat, offline-capability-checked speech input, local speech output, Keychain-backed AES-GCM opt-in memory, device-bound Ed25519 self-enrollment and Guard controls. Android includes the in-process llama.cpp JNI runtime, verified starter-model download, offline voice, encrypted opt-in memory and signed recovery polling.
 
-**Not yet end-to-end verified:** physical-device installation and testing on each platform (the Android debug APK is CI-built but has not yet been tested on a physical phone); iPhone-native recovery enrollment (now implemented but not yet physical-device tested), on-device model execution; desktop speech input; live recovery API deployment and multi-device recovery drills; cross-device memory sync; and production signing/distribution. These are distinct from the passing CI builds. Platform approvals and signing requirements must be checked against the actual release configuration at operationalization.
+**Not yet end-to-end verified:** physical-device installation and testing on each platform (the Android debug APK is CI-built but has not yet been tested on a physical phone); iPhone-native recovery enrollment (now implemented but not yet physical-device tested), on-device model execution; desktop microphone/Whisper end-to-end testing on physical machines; live recovery API deployment and multi-device recovery drills; cross-device memory sync; and production signing/distribution. These are distinct from the passing CI builds. Platform approvals and signing requirements must be checked against the actual release configuration at operationalization.
 
 Run workspace tests from a local clone:
 
