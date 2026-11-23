@@ -39,7 +39,7 @@ if let glow = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: [
 }
 
 func gradientStroke(_ path: CGPath, width: CGFloat, colors: [NSColor], start: CGPoint, end: CGPoint) {
-    guard let stroked = path.copy(strokingWithWidth: width, lineCap: .round, lineJoin: .round, miterLimit: 10) else { return }
+    let stroked = path.copy(strokingWithWidth: width, lineCap: .round, lineJoin: .round, miterLimit: 10)
     ctx.saveGState()
     ctx.addPath(stroked)
     ctx.clip()
