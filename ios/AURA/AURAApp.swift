@@ -756,7 +756,8 @@ struct ContentView: View {
                     speechOutput.stop()
                     return
                 }
-                await assistant.send(spoken, savedMemory: memoryVault.enabled ? memoryVault.items : [])
+                let savedItems: [AuraMemoryItem] = memoryVault.enabled ? memoryVault.items : []
+                await assistant.send(spoken, savedMemory: savedItems)
             }
         }
         .onChange(of: assistant.lastAnswer) { value in
