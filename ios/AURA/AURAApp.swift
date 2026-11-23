@@ -6,7 +6,6 @@ import Security
 import Speech
 import AVFoundation
 import AppIntents
-import UIKit
 
 
 struct AuraMemoryItem: Codable, Identifiable {
@@ -632,11 +631,8 @@ struct OpenAURAAssistantIntent: AppIntent {
     static var description = IntentDescription("Open your private AURA assistant.")
     static var openAppWhenRun = true
 
-    @MainActor
     func perform() async throws -> some IntentResult {
-        guard let url = URL(string: "aura://assistant") else { return .result() }
-        await UIApplication.shared.open(url)
-        return .result()
+        .result()
     }
 }
 
