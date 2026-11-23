@@ -641,8 +641,8 @@ struct AURAAppShortcuts: AppShortcutsProvider {
         AppShortcut(
             intent: OpenAURAAssistantIntent(),
             phrases: [
-                "Open AURA with \\.applicationName",
-                "Start AURA with \\.applicationName"
+                "Open \\(.applicationName)",
+                "Start \\(.applicationName)"
             ],
             shortTitle: "Open AURA",
             systemImageName: "sparkles"
