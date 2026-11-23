@@ -28,7 +28,7 @@ let recoveryDevices = [];
 app.innerHTML = `
   <main class="shell">
     <aside class="rail">
-      <div class="brand"><span class="orb">A</span><span>AURA</span></div>
+      <div class="brand"><img class="brand-icon" src="/aura-mark.svg" alt="" /><span class="brand-copy"><strong>AURA</strong><small>Private AI Companion</small></span></div>
       <nav aria-label="Main navigation">
         <button class="nav active" data-view="assistant">◈ <span>Assistant</span></button>
         <button class="nav" data-view="memory">▤ <span>Memory</span></button>
