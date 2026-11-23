@@ -110,6 +110,7 @@ class AuraFloatingAssistantService : Service() {
     }
 
     private fun removeBubble() {
+        getSharedPreferences("aura_presence", MODE_PRIVATE).edit().putBoolean("floating_enabled", false).apply()
         val current = bubble ?: return
         try {
             windowManager?.removeView(current)
