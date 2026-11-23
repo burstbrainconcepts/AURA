@@ -5,6 +5,8 @@ import CryptoKit
 import Security
 import Speech
 import AVFoundation
+import AppIntents
+import UIKit
 
 
 struct AuraMemoryItem: Codable, Identifiable {
@@ -622,6 +624,36 @@ final class AuraRecoveryModel: ObservableObject {
     }
 }
 
+
+/// User-invoked Siri/App Shortcut entry point. It opens AURA; it never starts
+/// microphone capture automatically.
+struct OpenAURAAssistantIntent: AppIntent {
+    static var title: LocalizedStringResource = "Open AURA"
+    static var description = IntentDescription("Open your private AURA assistant.")
+    static var openAppWhenRun = true
+
+    @MainActor
+    func perform() async throws -> some IntentResult {
+        guard let url = URL(string: "aura://assistant") else { return .result() }
+        await UIApplication.shared.open(url)
+        return .result()
+    }
+}
+
+struct AURAAppShortcuts: AppShortcutsProvider {
+    static var appShortcuts: [AppShortcut] {
+        AppShortcut(
+            intent: OpenAURAAssistantIntent(),
+            phrases: [
+                "Open AURA with \\.applicationName",
+                "Start AURA with \\.applicationName"
+            ],
+            shortTitle: "Open AURA",
+            systemImageName: "sparkles"
+        )
+    }
+}
+
 struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var assistant = AuraAssistantModel()
@@ -878,6 +910,12 @@ struct ContentView: View {
                     .autocorrectionDisabled()
                 Button("Test local connection") { Task { await assistant.checkHealth() } }
                 Text(assistant.status).font(.caption).foregroundStyle(.secondary)
+            }
+            Section("Presence Mode") {
+                Toggle("Enable Siri / App Shortcuts", isOn: .constant(true))
+                    .disabled(true)
+                Text("Try saying “Open AURA” or “Start AURA” after Siri has learned the shortcut. This opens the app; it does not start listening automatically. iOS does not allow AURA to create a system-wide floating orb or hide itself programmatically.")
+                Text("To remove AURA from your Home Screen, use the iOS Home Screen controls. AURA remains available in App Library and Settings, so you can always reopen or uninstall it.")
             }
             Section("Voice") {
                 Toggle("Speak AURA replies", isOn: $voiceOutputEnabled)
