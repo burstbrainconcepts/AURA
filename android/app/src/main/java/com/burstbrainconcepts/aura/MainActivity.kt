@@ -437,6 +437,11 @@ class MainActivity : Activity() {
             if (modelReady) startHandsFreeListening()
             else status.text = "AURA is preparing its local model before listening."
         }
+        val prompt = intent.getStringExtra(EXTRA_VOICE_PROMPT).orEmpty()
+        if (prompt.isNotBlank()) {
+            pendingWakePrompt = prompt
+            if (modelReady) submitWakePrompt()
+        }
     }
 
     private fun startHandsFreeListening() {
@@ -1026,6 +1031,7 @@ class MainActivity : Activity() {
                 pauseDownload.visibility = ViewGroup.GONE
                 status.text = "OFFLINE AI READY • Qwen 0.5B • CPU mode"
                 startHandsFreeListening()
+                submitWakePrompt()
                 download.text = "Model installed ✓"
                 download.isEnabled = false
                 input.isEnabled = true
@@ -1079,6 +1085,7 @@ class MainActivity : Activity() {
                     download.text = "Model installed ✓"
                     status.text = "OFFLINE AI READY • Qwen 0.5B • CPU mode"
                     startHandsFreeListening()
+                    submitWakePrompt()
                     input.isEnabled = true
                     send.isEnabled = true
                     mic.isEnabled = voice.isOnDeviceRecognitionAvailable()
@@ -1137,6 +1144,7 @@ class MainActivity : Activity() {
                     mic.isEnabled = voice.isOnDeviceRecognitionAvailable()
                     rememberButton.isEnabled = memory.enabled
                     if (speakReplies) voice.speak(answer)
+                    resumeWakeListening()
                 }
             } catch (error: Exception) {
                 runOnUiThread {
@@ -1157,7 +1165,10 @@ class MainActivity : Activity() {
     @Deprecated("Use permission result API")
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == OfflineVoiceController.REQUEST_AUDIO) {
+        if (requestCode == REQUEST_WAKE_AUDIO) {
+            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) startWakeService()
+            else status.text = "Microphone permission is required for Hey AURA."
+        } else if (requestCode == OfflineVoiceController.REQUEST_AUDIO) {
             if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 voice.startListening()
             } else {
