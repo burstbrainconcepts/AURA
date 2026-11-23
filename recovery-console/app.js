@@ -188,6 +188,7 @@ async function lockDevice(device) {
       body: JSON.stringify({ deviceId: device.id, command: "device.lock", userApproved: true, ttlMs: 900000 })
     });
     setStatus(`Lock command queued. It expires at ${formatDate(result.expiresAt)}.`);
+    await loadActivity();
   } catch (error) {
     setStatus(error.message, true);
   }
@@ -203,6 +204,7 @@ async function refreshLocation(device) {
       body: JSON.stringify({ deviceId: device.id, command: "location.refresh", userApproved: true, ttlMs: 900000 })
     });
     setStatus(`Location request queued. It expires at ${formatDate(result.expiresAt)}. Refresh the device list after it checks in.`);
+    await loadActivity();
   } catch (error) {
     setStatus(error.message, true);
   }
