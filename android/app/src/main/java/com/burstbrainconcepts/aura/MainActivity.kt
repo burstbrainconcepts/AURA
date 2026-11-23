@@ -104,7 +104,7 @@ class MainActivity : Activity() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(20, 24, 20, 20)
-            setBackgroundColor(0xFF101522.toInt())
+            setBackgroundColor(0xFF080B1C.toInt())
         }
         val heading = TextView(this).apply {
             text = "AURA"
@@ -114,8 +114,18 @@ class MainActivity : Activity() {
         status = TextView(this).apply {
             text = "PRIVATE AI • ON-DEVICE"
             textSize = 12f
-            setTextColor(0xFF9EADC7.toInt())
+            setTextColor(0xFF19D8E8.toInt())
             setPadding(0, 6, 0, 12)
+        }
+        val presenceButton = Button(this).apply {
+            text = "Presence Mode • Add Quick Settings tile"
+            setOnClickListener {
+                AlertDialog.Builder(this@MainActivity)
+                    .setTitle("Bring AURA within reach")
+                    .setMessage("Add the Open AURA tile from Android Quick Settings: swipe down twice, tap Edit (pencil), find Open AURA, then drag it into your active tiles. Tap it any time to open AURA. It never starts listening automatically. To rest AURA, close the app; to summon it again, tap the tile.")
+                    .setPositiveButton("Got it", null)
+                    .show()
+            }
         }
         download = Button(this).apply {
             text = "Download starter AI model (about 398 MB)"
@@ -219,6 +229,7 @@ class MainActivity : Activity() {
         }
         root.addView(heading)
         root.addView(status)
+        root.addView(presenceButton)
         root.addView(download)
         root.addView(downloadProgress)
         root.addView(pauseDownload)
