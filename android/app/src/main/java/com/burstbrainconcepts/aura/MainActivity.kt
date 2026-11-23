@@ -49,6 +49,8 @@ class MainActivity : Activity() {
     private lateinit var recoverySetupButton: Button
     private lateinit var recoveryPollButton: Button
     private lateinit var locationButton: Button
+    private lateinit var deviceModelSummary: TextView
+    private var showPage: (String) -> Unit = {}
     private var lastUserMessage = ""
     private var lastAssistantMessage = ""
     private var speakReplies = false
@@ -140,7 +142,7 @@ class MainActivity : Activity() {
         fun pageScroll(content: LinearLayout): ScrollView = ScrollView(this).apply {
             isFillViewport = true
             setBackgroundColor(ink)
-            addView(content, ScrollView.LayoutParams(
+            addView(content, ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
             ))
         }
@@ -263,7 +265,7 @@ class MainActivity : Activity() {
         mic = actionButton("🎙  Speak") { voice.startListening() }.apply { isEnabled = false }
         speakToggle = actionButton("Voice replies: off") {
             speakReplies = !speakReplies
-            text = if (speakReplies) "Voice replies: on" else "Voice replies: off"
+            speakToggle.text = if (speakReplies) "Voice replies: on" else "Voice replies: off"
             if (!speakReplies) voice.stopSpeaking()
         }.apply { isEnabled = false }
         voiceControls.addView(mic, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
