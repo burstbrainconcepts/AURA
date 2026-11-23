@@ -9,6 +9,8 @@ AURA's first remote recovery service: PostgreSQL-backed device enrollment, accou
 - Random 256-bit device bearer tokens are returned once; only SHA-256 token hashes are stored.
 - Account-scoped device listing and revocation.
 - Account-scoped command history and audit-event history endpoints, with bounded result limits.
+- Per-process request throttles for enrollment, command issuance, device polling, and acknowledgements; buckets are isolated by client address and a one-way credential fingerprint.
+- Consistent no-store, no-sniff, anti-framing, referrer, and browser-permission response headers.
 - Server-side Ed25519 signatures for queued commands. Device identity keys and command-signing keys are separate.
 - Capability checks, explicit account approval for screen-lock and location-refresh commands, short command expiry, and device acknowledgements.
 - PostgreSQL audit events for enrollment, revocation, command issuance, acknowledgements, and consented location updates.
@@ -59,7 +61,7 @@ npm run migrate --workspace @aura/recovery-server
 npm run start --workspace @aura/recovery-server
 ```
 
-The service must be exposed through HTTPS (for example, behind Caddy or another TLS reverse proxy). Do not expose the raw HTTP listener directly to the public internet.
+The service must be exposed through HTTPS (for example, behind Caddy or another TLS reverse proxy). Do not expose the raw HTTP listener directly to the public internet. The built-in rate limiter is a bounded, per-process defense-in-depth control; it is not a substitute for a shared distributed limiter or edge/WAF controls. Configure request-rate limits at the trusted reverse proxy as well, especially when running multiple API replicas. The API deliberately does not trust arbitrary `X-Forwarded-For` headers.
 
 ## Account console
 
