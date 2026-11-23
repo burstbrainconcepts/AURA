@@ -105,161 +105,296 @@ class MainActivity : Activity() {
     }
 
     private fun buildInterface() {
+        val ink = 0xFF100B2E.toInt()
+        val deepPurple = 0xFF1B1245.toInt()
+        val purple = 0xFF6D4AFF.toInt()
+        val lavender = 0xFFB9A7FF.toInt()
+        val white = 0xFFF9F7FF.toInt()
+        val muted = 0xFFBDB5D8.toInt()
+        val line = 0xFF352A62.toInt()
+
+        fun label(text: String, size: Float = 14f, color: Int = white): TextView =
+            TextView(this).apply {
+                this.text = text
+                textSize = size
+                setTextColor(color)
+                setPadding(0, 8, 0, 8)
+            }
+
+        fun actionButton(textValue: String, primary: Boolean = false, onClick: () -> Unit): Button =
+            Button(this).apply {
+                text = textValue
+                isAllCaps = false
+                textSize = 14f
+                setTextColor(white)
+                backgroundTintList = android.content.res.ColorStateList.valueOf(if (primary) purple else 0xFF302653.toInt())
+                setPadding(14, 10, 14, 10)
+                setOnClickListener { onClick() }
+            }
+
+        fun section(title: String): TextView = label(title, 12f, lavender).apply {
+            letterSpacing = 0.12f
+            setPadding(0, 18, 0, 6)
+        }
+
+        fun pageScroll(content: LinearLayout): ScrollView = ScrollView(this).apply {
+            isFillViewport = true
+            setBackgroundColor(ink)
+            addView(content, ScrollView.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ))
+        }
+
+        fun pageColumn(): LinearLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(20, 12, 20, 24)
+            setBackgroundColor(ink)
+        }
+
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(20, 24, 20, 20)
-            setBackgroundColor(0xFF080B1C.toInt())
+            setPadding(0, 18, 0, 0)
+            setBackgroundColor(ink)
+        }
+
+        val top = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(22, 8, 22, 12)
+            setBackgroundColor(ink)
+        }
+        val brandRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+        }
+        val mark = TextView(this).apply {
+            text = "✦"
+            textSize = 28f
+            setTextColor(lavender)
+            setPadding(0, 0, 12, 0)
         }
         val heading = TextView(this).apply {
             text = "AURA"
-            textSize = 28f
-            setTextColor(0xFFFFFFFF.toInt())
+            textSize = 25f
+            letterSpacing = 0.16f
+            setTextColor(white)
         }
+        val privateTag = TextView(this).apply {
+            text = "PRIVATE AI"
+            textSize = 10f
+            setTextColor(lavender)
+            setPadding(12, 0, 0, 0)
+        }
+        brandRow.addView(mark)
+        brandRow.addView(heading)
+        brandRow.addView(privateTag)
         status = TextView(this).apply {
-            text = "PRIVATE AI • ON-DEVICE"
+            text = "Your private assistant"
             textSize = 12f
-            setTextColor(0xFF19D8E8.toInt())
-            setPadding(0, 6, 0, 12)
+            setTextColor(muted)
+            setPadding(0, 4, 0, 0)
         }
-        val presenceButton = Button(this).apply {
-            text = "Presence Mode • Add Quick Settings tile"
-            setOnClickListener {
-                AlertDialog.Builder(this@MainActivity)
-                    .setTitle("Bring AURA within reach")
-                    .setMessage("Add the Open AURA tile from Android Quick Settings: swipe down twice, tap Edit (pencil), find Open AURA, then drag it into your active tiles. Tap it any time to open AURA. It never starts listening automatically. To rest AURA, close the app; to summon it again, tap the tile.")
-                    .setPositiveButton("Got it", null)
-                    .show()
-            }
+        top.addView(brandRow)
+        top.addView(status)
+
+        val pageHost = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(ink)
         }
-        download = Button(this).apply {
-            text = "Download starter AI model (about 398 MB)"
-            setOnClickListener { if (downloadPaused) continueModelDownload() else confirmModelDownload() }
+        val navigation = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(8, 8, 8, 12)
+            setBackgroundColor(deepPurple)
         }
+        val pageViews = linkedMapOf<String, ScrollView>()
+        val navButtons = linkedMapOf<String, Button>()
+
+        // HOME
+        val home = pageColumn()
+        home.addView(label("Good to see you.", 25f, white))
+        home.addView(label("Your assistant. Your device. Your privacy.", 14f, muted))
+        val hero = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(18, 18, 18, 18)
+            setBackgroundColor(deepPurple)
+        }
+        hero.addView(label("AURA IS YOURS", 11f, lavender))
+        hero.addView(label("Think freely. Ask anything.", 21f, white))
+        hero.addView(label("Chat privately with your on-device AI. Once the model is installed, core conversations work offline.", 13f, muted))
+        hero.addView(actionButton("Start a conversation  →", true) { showPage("Chat") })
+        home.addView(hero)
+        home.addView(section("QUICK ACCESS"))
+        home.addView(actionButton("✦  Chat with AURA") { showPage("Chat") })
+        home.addView(actionButton("⇩  Model downloads & updates") { showPage("Downloads") })
+        home.addView(actionButton("⚙  Privacy & device settings") { showPage("Settings") })
+        home.addView(section("YOUR DEVICE"))
+        home.addView(label("Offline model: checking status…", 13f, muted).also { deviceModelSummary = it })
+        home.addView(label("Memory is private and off until you enable it. Location sharing is off by default.", 13f, muted))
+
+        // CHAT
+        val chat = pageColumn()
+        chat.addView(label("Chat", 24f, white))
+        chat.addView(label("A private conversation, stored on this device.", 13f, muted))
+        transcript = TextView(this).apply {
+            text = "Welcome to AURA. Your conversation will appear here. Download the starter model to begin chatting offline.\n"
+            textSize = 15f
+            setTextColor(white)
+            setPadding(14, 16, 14, 16)
+            setBackgroundColor(deepPurple)
+        }
+        val transcriptScroll = ScrollView(this).apply {
+            addView(transcript)
+            isFillViewport = true
+        }
+        chat.addView(transcriptScroll, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
+        ))
+        input = EditText(this).apply {
+            hint = "Message AURA…"
+            setTextColor(white)
+            setHintTextColor(muted)
+            setSingleLine(false)
+            maxLines = 4
+            isEnabled = false
+            setPadding(14, 12, 14, 12)
+            setBackgroundColor(deepPurple)
+        }
+        chat.addView(input)
+        val voiceControls = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        mic = actionButton("🎙  Speak") { voice.startListening() }.apply { isEnabled = false }
+        speakToggle = actionButton("Voice replies: off") {
+            speakReplies = !speakReplies
+            text = if (speakReplies) "Voice replies: on" else "Voice replies: off"
+            if (!speakReplies) voice.stopSpeaking()
+        }.apply { isEnabled = false }
+        voiceControls.addView(mic, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        voiceControls.addView(speakToggle, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        chat.addView(voiceControls)
+        send = actionButton("Send message", true) { sendMessage() }.apply { isEnabled = false }
+        chat.addView(send)
+
+        // DOWNLOADS
+        val downloads = pageColumn()
+        downloads.addView(label("Downloads & updates", 24f, white))
+        downloads.addView(label("Manage the AI model that powers offline conversations.", 13f, muted))
+        val modelCard = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(18, 18, 18, 18)
+            setBackgroundColor(deepPurple)
+        }
+        modelCard.addView(label("AURA STARTER MODEL", 11f, lavender))
+        modelCard.addView(label("On-device AI • Qwen 0.5B", 18f, white))
+        modelCard.addView(label("Approximately 397 MB • CPU mode • Works offline after setup", 12f, muted))
+        download = actionButton("Download model", true) {
+            if (downloadPaused) continueModelDownload() else confirmModelDownload()
+        }
+        modelCard.addView(download)
         downloadProgress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
             max = 1000
             progress = 0
             visibility = ViewGroup.GONE
         }
-        pauseDownload = Button(this).apply {
-            text = "Pause download"
+        modelCard.addView(downloadProgress)
+        pauseDownload = actionButton("Pause download") { pauseModelDownload() }.apply {
             visibility = ViewGroup.GONE
-            setOnClickListener { pauseModelDownload() }
         }
-        val deviceControls = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
+        modelCard.addView(pauseDownload)
+        downloads.addView(modelCard)
+        downloads.addView(section("DOWNLOAD BEHAVIOUR"))
+        downloads.addView(label("Downloads can be paused and resumed. AURA verifies the model checksum before loading it.", 13f, muted))
+        downloads.addView(label("App updates are delivered through a newer AURA installer. This screen currently manages the AI model download.", 12f, muted))
+
+        // SETTINGS
+        val settings = pageColumn()
+        settings.addView(label("Settings", 24f, white))
+        settings.addView(label("Control how AURA works on this device.", 13f, muted))
+        settings.addView(section("PRESENCE"))
+        val presenceButton = actionButton("Add AURA to Quick Settings") {
+            AlertDialog.Builder(this@MainActivity)
+                .setTitle("Bring AURA within reach")
+                .setMessage("Swipe down twice, tap Edit (pencil), find Open AURA, then drag it into your active tiles. AURA never starts listening automatically.")
+                .setPositiveButton("Got it", null).show()
         }
-        protectionButton = Button(this).apply {
-            text = "Enable device lock"
-            setOnClickListener { requestDeviceAdmin() }
-        }
-        lockButton = Button(this).apply {
-            text = "Lock now"
-            isEnabled = false
-            setOnClickListener { confirmDeviceLock() }
-        }
-        deviceControls.addView(protectionButton, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        deviceControls.addView(lockButton, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        val memoryControls = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-        }
-        memoryButton = Button(this).apply {
-            text = if (memory.enabled) "Memory: on" else "Memory: off"
-            setOnClickListener { showMemorySettings() }
-        }
-        rememberButton = Button(this).apply {
-            text = "Remember last chat"
-            isEnabled = false
-            setOnClickListener { rememberLastExchange() }
-        }
-        memoryControls.addView(memoryButton, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        memoryControls.addView(rememberButton, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        val recoveryControls = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-        }
-        recoverySetupButton = Button(this).apply {
-            text = "Link remote recovery"
-            setOnClickListener { showRecoverySetup() }
-        }
-        recoveryPollButton = Button(this).apply {
-            text = "Check now"
-            isEnabled = false
-            setOnClickListener { pollRecoveryNow() }
-        }
-        locationButton = Button(this).apply {
-            text = "Location: off"
-            setOnClickListener { showLocationSettings() }
-        }
-        recoveryControls.addView(recoverySetupButton, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        recoveryControls.addView(recoveryPollButton, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        recoveryControls.addView(locationButton, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        transcript = TextView(this).apply {
-            text = "Welcome to AURA. Download the starter model once; after that, chat can run offline on this device.\n"
-            textSize = 16f
-            setTextColor(0xFFE8EDF7.toInt())
-            setPadding(12, 12, 12, 12)
-        }
-        val scroll = ScrollView(this).apply { addView(transcript) }
-        input = EditText(this).apply {
-            hint = "Message AURA..."
-            setTextColor(0xFFFFFFFF.toInt())
-            setHintTextColor(0xFF8794AA.toInt())
-            setSingleLine(false)
-            maxLines = 4
-            isEnabled = false
-        }
-        val voiceControls = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-        }
-        mic = Button(this).apply {
-            text = "🎙 Speak"
-            isEnabled = false
-            setOnClickListener { voice.startListening() }
-        }
-        speakToggle = Button(this).apply {
-            text = "Voice replies: off"
-            isEnabled = false
-            setOnClickListener {
-                speakReplies = !speakReplies
-                text = if (speakReplies) "Voice replies: on" else "Voice replies: off"
-                if (!speakReplies) voice.stopSpeaking()
-            }
-        }
-        voiceControls.addView(mic, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        voiceControls.addView(speakToggle, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        send = Button(this).apply {
-            text = "Send"
-            isEnabled = false
-            setOnClickListener { sendMessage() }
-        }
-        root.addView(heading)
-        root.addView(status)
-        root.addView(presenceButton)
+        settings.addView(presenceButton)
         overlayButton.apply {
-            text = if (getSharedPreferences("aura_presence", MODE_PRIVATE)
-                .getBoolean("floating_enabled", false)) {
-                "Dismiss floating AURA bubble"
-            } else {
-                "Enable floating AURA bubble"
-            }
+            text = if (getSharedPreferences("aura_presence", MODE_PRIVATE).getBoolean("floating_enabled", false))
+                "Hide floating AURA bubble" else "Enable floating AURA bubble"
+            isAllCaps = false
+            textSize = 14f
+            setTextColor(white)
+            backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF302653.toInt())
             setOnClickListener { toggleFloatingAssistant() }
         }
-        root.addView(overlayButton)
-        root.addView(download)
-        root.addView(downloadProgress)
-        root.addView(pauseDownload)
-        root.addView(deviceControls)
-        root.addView(memoryControls)
-        root.addView(recoveryControls)
-        root.addView(scroll, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-        root.addView(input, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        root.addView(voiceControls)
-        root.addView(send)
+        settings.addView(overlayButton)
+        settings.addView(section("DEVICE SECURITY"))
+        protectionButton = actionButton("Enable device lock") { requestDeviceAdmin() }
+        lockButton = actionButton("Lock device now") { confirmDeviceLock() }.apply { isEnabled = false }
+        settings.addView(protectionButton)
+        settings.addView(lockButton)
+        settings.addView(section("PRIVATE MEMORY"))
+        memoryButton = actionButton(if (memory.enabled) "Memory: on" else "Memory: off") { showMemorySettings() }
+        rememberButton = actionButton("Remember last chat") { rememberLastExchange() }.apply { isEnabled = false }
+        settings.addView(memoryButton)
+        settings.addView(rememberButton)
+        settings.addView(section("REMOTE RECOVERY"))
+        recoverySetupButton = actionButton("Link remote recovery") { showRecoverySetup() }
+        recoveryPollButton = actionButton("Check recovery now") { pollRecoveryNow() }.apply { isEnabled = false }
+        locationButton = actionButton("Location: off") { showLocationSettings() }
+        settings.addView(recoverySetupButton)
+        settings.addView(recoveryPollButton)
+        settings.addView(locationButton)
+        settings.addView(section("ABOUT AURA"))
+        settings.addView(label("AURA • Private on-device AI assistant", 13f, muted))
+
+        pageViews["Home"] = pageScroll(home)
+        pageViews["Chat"] = pageScroll(chat)
+        pageViews["Downloads"] = pageScroll(downloads)
+        pageViews["Settings"] = pageScroll(settings)
+
+        fun showSelectedPage(name: String) {
+            pageHost.removeAllViews()
+            pageHost.addView(pageViews[name], LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
+            ))
+            navButtons.forEach { (key, button) ->
+                button.backgroundTintList = android.content.res.ColorStateList.valueOf(
+                    if (key == name) purple else deepPurple
+                )
+                button.setTextColor(if (key == name) white else muted)
+            }
+        }
+        // The listener calls this local selector; showPage keeps Home shortcuts usable.
+        showPage = { name -> showSelectedPage(name) }
+
+        listOf("Home", "Chat", "Downloads", "Settings").forEach { name ->
+            val icon = when (name) {
+                "Home" -> "⌂"
+                "Chat" -> "✧"
+                "Downloads" -> "⇩"
+                else -> "⚙"
+            }
+            val button = Button(this).apply {
+                text = "$icon\n$name"
+                isAllCaps = false
+                textSize = 10f
+                setTextColor(muted)
+                backgroundTintList = android.content.res.ColorStateList.valueOf(deepPurple)
+                setPadding(0, 4, 0, 4)
+                setOnClickListener { showSelectedPage(name) }
+            }
+            navButtons[name] = button
+            navigation.addView(button, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        }
+
+        root.addView(top)
+        root.addView(pageHost, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
+        ))
+        root.addView(navigation)
         setContentView(root)
+        showSelectedPage("Home")
+        updateDeviceAdminControls()
+        updateLocationButton()
     }
-
-
 
     private fun toggleFloatingAssistant() {
         val serviceIntent = Intent(this, AuraFloatingAssistantService::class.java)
