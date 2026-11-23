@@ -398,6 +398,27 @@ struct AuraRecoveryDevice: Decodable, Identifiable {
     let locationUpdatedAt: String?
 }
 private struct AuraRecoveryDeviceList: Decodable { let devices: [AuraRecoveryDevice] }
+private struct AuraEnrollmentChallengeRequest: Encodable {
+    let deviceId: String
+    let publicKeyPem: String
+    let platform: String
+    let label: String
+    let capabilities: [String]
+}
+private struct AuraEnrollmentChallengeResponse: Decodable {
+    let challengeId: String
+    let message: String
+}
+private struct AuraEnrollmentCompleteRequest: Encodable {
+    let challengeId: String
+    let publicKeyPem: String
+    let signature: String
+}
+private struct AuraEnrollmentCompleteResponse: Decodable {
+    let deviceId: String
+    let deviceToken: String
+    let commandServerPublicKeyPem: String
+}
 private struct AuraRecoveryCommandRequest: Encodable {
     let deviceId: String
     let command: String
@@ -428,6 +449,88 @@ final class AuraRecoveryModel: ObservableObject {
             accountToken = token
             status = "Connected · \(devices.count) registered devices."
         } catch { status = "Recovery connection failed: " + error.localizedDescription }
+    }
+
+    func enrollThisIPhone() async {
+        let token = accountToken.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard token.count >= 32 else { status = "Connect with your account token before enrolling this iPhone."; return }
+        let deviceId = UserDefaults.standard.string(forKey: "aura.ios.device-id") ?? UUID().uuidString.lowercased()
+        do {
+            let privateKeyData: Data
+            if let existing = readSecret(service: "com.burstbrainconcepts.aura.device", account: "ed25519-private-key") {
+                privateKeyData = existing
+            } else {
+                let generated = Curve25519.Signing.PrivateKey()
+                privateKeyData = generated.rawRepresentation
+                try saveSecret(privateKeyData, service: "com.burstbrainconcepts.aura.device", account: "ed25519-private-key")
+            }
+            let privateKey = try Curve25519.Signing.PrivateKey(rawRepresentation: privateKeyData)
+            let publicDER = Data([0x30, 0x2a, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x03, 0x21, 0x00]) + privateKey.publicKey.rawRepresentation
+            let encoded = publicDER.base64EncodedString()
+            let wrapped = stride(from: 0, to: encoded.count, by: 64).map { start -> String in
+                let begin = encoded.index(encoded.startIndex, offsetBy: start)
+                let end = encoded.index(begin, offsetBy: min(64, encoded.count - start))
+                return String(encoded[begin..<end])
+            }.joined(separator: "\n")
+            let publicKeyPem = "-----BEGIN PUBLIC KEY-----\n\(wrapped)\n-----END PUBLIC KEY-----"
+            let fingerprint = SHA256.hash(data: Data(publicKeyPem.utf8)).map { String(format: "%02x", $0) }.joined()
+            let challengeBody = AuraEnrollmentChallengeRequest(
+                deviceId: deviceId,
+                publicKeyPem: publicKeyPem,
+                platform: "ios",
+                label: "AURA iPhone",
+                capabilities: []
+            )
+            let challengeData = try JSONEncoder().encode(challengeBody)
+            let challengeResponseData = try await request(path: "/v1/enrollment/challenges", method: "POST", token: token, body: challengeData)
+            let challenge = try JSONDecoder().decode(AuraEnrollmentChallengeResponse.self, from: challengeResponseData)
+            let signature = try privateKey.signature(for: Data(challenge.message.utf8)).base64EncodedString()
+            let completeBody = AuraEnrollmentCompleteRequest(
+                challengeId: challenge.challengeId,
+                publicKeyPem: publicKeyPem,
+                signature: signature
+            )
+            let completeData = try JSONEncoder().encode(completeBody)
+            let resultData = try await request(path: "/v1/enrollment/complete", method: "POST", token: token, body: completeData)
+            let result = try JSONDecoder().decode(AuraEnrollmentCompleteResponse.self, from: resultData)
+            try saveSecret(Data(result.deviceToken.utf8), service: "com.burstbrainconcepts.aura.device", account: "device-token")
+            try saveSecret(Data(result.commandServerPublicKeyPem.utf8), service: "com.burstbrainconcepts.aura.device", account: "server-public-key")
+            UserDefaults.standard.set(deviceId, forKey: "aura.ios.device-id")
+            UserDefaults.standard.set(baseURL, forKey: "aura.recovery.url")
+            try saveToken(token)
+            accountToken = token
+            status = "This iPhone is enrolled securely. Device recovery actions remain capability-gated until a native action adapter is verified."
+            await connect()
+        } catch {
+            status = "iPhone enrollment failed: " + error.localizedDescription
+        }
+    }
+
+    private func saveSecret(_ data: Data, service: String, account: String) throws {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account
+        ]
+        SecItemDelete(query as CFDictionary)
+        var add = query
+        add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        add[kSecValueData as String] = data
+        let result = SecItemAdd(add as CFDictionary, nil)
+        guard result == errSecSuccess else { throw NSError(domain: NSOSStatusErrorDomain, code: Int(result)) }
+    }
+
+    private func readSecret(service: String, account: String) -> Data? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        var result: CFTypeRef?
+        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess else { return nil }
+        return result as? Data
     }
 
     private func validDeviceId(_ value: String) -> Bool {
@@ -718,6 +821,11 @@ struct ContentView: View {
                 Button("Disconnect", role: .destructive) { recovery.disconnect() }
                     .buttonStyle(.bordered)
             }
+            Button("Enroll this iPhone") { Task { await recovery.enrollThisIPhone() } }
+                .buttonStyle(.bordered)
+                .disabled(recovery.accountToken.trimmingCharacters(in: .whitespacesAndNewlines).count < 32)
+            Text("This registers the iPhone with a device-bound Ed25519 key. It currently advertises no remote-action capabilities; those are added only after a native, approved action adapter is implemented and verified.")
+                .font(.caption2).foregroundStyle(.secondary)
             Text(recovery.status).font(.caption).foregroundStyle(.secondary)
             List {
                 ForEach(recovery.devices) { device in
