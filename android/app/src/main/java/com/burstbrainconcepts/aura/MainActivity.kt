@@ -303,6 +303,22 @@ class MainActivity : Activity() {
         downloads.addView(label("Downloads can be paused and resumed. AURA verifies the model checksum before loading it.", 13f, muted))
         downloads.addView(label("App updates are delivered through a newer AURA installer. This screen currently manages the AI model download.", 12f, muted))
 
+        // NOTIFICATIONS
+        val notifications = pageColumn()
+        notifications.addView(label("Notifications", 24f, white))
+        notifications.addView(label("Important updates and activity from AURA.", 13f, muted))
+        val noticeCard = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(18, 18, 18, 18)
+            setBackgroundColor(deepPurple)
+        }
+        noticeCard.addView(label("✦  YOU'RE ALL CAUGHT UP", 12f, lavender))
+        noticeCard.addView(label("No new notifications", 19f, white))
+        noticeCard.addView(label("Model download progress, setup messages and security status appear in their respective sections.", 13f, muted))
+        notifications.addView(noticeCard)
+        notifications.addView(section("ACTIVITY"))
+        notifications.addView(label("AURA keeps private conversations on this device. Location recovery remains off unless you explicitly enable it.", 13f, muted))
+
         // SETTINGS
         val settings = pageColumn()
         settings.addView(label("Settings", 24f, white))
@@ -348,6 +364,7 @@ class MainActivity : Activity() {
         pageViews["Home"] = pageScroll(home)
         pageViews["Chat"] = pageScroll(chat)
         pageViews["Downloads"] = pageScroll(downloads)
+        pageViews["Notifications"] = pageScroll(notifications)
         pageViews["Settings"] = pageScroll(settings)
 
         fun showSelectedPage(name: String) {
@@ -365,11 +382,12 @@ class MainActivity : Activity() {
         // The listener calls this local selector; showPage keeps Home shortcuts usable.
         showPage = { name -> showSelectedPage(name) }
 
-        listOf("Home", "Chat", "Downloads", "Settings").forEach { name ->
+        listOf("Home", "Chat", "Downloads", "Notifications", "Settings").forEach { name ->
             val icon = when (name) {
                 "Home" -> "⌂"
                 "Chat" -> "✧"
                 "Downloads" -> "⇩"
+                "Notifications" -> "♧"
                 else -> "⚙"
             }
             val button = Button(this).apply {
