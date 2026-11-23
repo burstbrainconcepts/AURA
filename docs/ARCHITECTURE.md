@@ -1,4 +1,4 @@
-# AURA architecture (initial)
+# AURA architecture
 
 ## Product boundary
 
@@ -6,56 +6,80 @@ AURA is a cross-platform local-first assistant with a separate device-protection
 
 ### AURA Assistant
 
-- Voice input, speech recognition and speech output
-- Local model runtime with optional cloud providers
-- Conversation and user-controlled long-term memory
-- Offline knowledge retrieval
-- Command planning and permission-aware execution
-- Android, iOS and desktop clients
+- Local and optional remote model inference through replaceable runtime adapters.
+- Voice input, speech recognition and speech output with explicit runtime capability reporting.
+- User-controlled conversation and long-term memory.
+- Offline knowledge retrieval.
+- Command planning and permission-aware execution.
+- Android, iOS and desktop clients.
 
 ### AURA Guard
 
-- Account and device registry
-- Device-bound credentials and passkeys
-- Session revocation for AURA services
-- Lost-device state and recovery workflow
-- Signed, expiring remote-command queue
-- Audit trail and user notifications
+- Account and device registry.
+- Device-bound credentials and passkeys.
+- AURA-session revocation and supported device-protection workflows.
+- Lost-device state and recovery workflow.
+- Signed, expiring remote-command queue.
+- Audit trail and user notifications.
 
-## Proposed high-level layers
+## High-level layers
 
-1. **Clients:** native Android (Kotlin), native iOS (Swift), desktop (Tauri + web UI).
+1. **Clients:** native Android, native iOS, and desktop (Tauri).
 2. **Shared contracts:** versioned command schema, capability model, event schema and API types.
-3. **Local core:** Rust where shared low-level logic is useful; platform-specific adapters remain native.
+3. **Local core:** shared Rust/TypeScript logic where useful; native platform adapters remain native.
 4. **Intelligence:** pluggable local inference runtime, optional remote model providers, retrieval and tool policy.
-5. **Voice:** replaceable STT, wake-word and TTS engines.
+5. **Voice:** replaceable STT, wake-word and TTS engines; local/offline modes are explicit capabilities, not assumptions.
 6. **Storage:** encrypted local database, explicit retention and export/delete controls.
 7. **Optional services:** account/device registry, push relay and encrypted command delivery.
+
+## Capability discovery and platform integration
+
+AURA must not turn a point-in-time platform limitation into a permanent product rule. Each installation discovers capabilities at runtime and reports a scoped state for the current device, OS version, account, app build, region, hardware, permissions, entitlements, agreements and deployment configuration.
+
+Use the shared capability states:
+
+- `available`: the adapter has verified that the capability can be used now.
+- `approval_required`: a user, administrator, platform team or partner approval is outstanding.
+- `configuration_required`: a setting, permission, service, model or credential must be configured.
+- `temporarily_unavailable`: the capability may be supported but cannot currently be used.
+- `not_available_in_context`: the current deployment has verified that the capability is not available in this specific context.
+- `unknown`: the adapter has not established a reliable result.
+
+A state is not a global statement about an operating system. Include the observation time, device identifier, platform/build context, evidence and next action. Refresh observations after OS updates, permission changes, account changes, entitlement changes and app upgrades. Never silently convert `unknown` or `approval_required` into a permanent denial.
+
+For approval-dependent capabilities, keep the product contract, adapter interface, UI state and test plan in place while the required operational discussions or agreements proceed. At release time, verify the then-current requirements with the relevant platform team and record the actual approvals and signing configuration. Do not assume an approval exists, and do not abandon an integration solely because an approval may be required.
 
 ## Security model
 
 - Never treat a voice match as sufficient authorization for sensitive operations.
-- Require platform biometrics, passkeys, device PIN or a recovery factor for high-risk actions.
+- Require supported platform authentication, passkeys, device PIN or a recovery factor for high-risk actions.
 - Sign remote commands; bind each command to a device, account, nonce, expiry and allowed action.
 - Reject replayed, expired, malformed or out-of-scope commands.
-- Keep immutable audit events for security-sensitive transitions.
-- Collect location or evidence only with transparent user consent and platform permissions.
-- Do not implement covert camera capture, hidden tracking or bypasses of OS protections.
+- Keep auditable records for security-sensitive transitions.
+- Collect location or evidence only with transparent user consent and verified platform permissions.
+- Do not implement covert camera capture, hidden tracking or security bypasses.
+- Treat a queued remote command as pending until the target device acknowledges and reports its outcome.
 
-## Platform constraints
-
-- Android capabilities depend on runtime permissions, special access and (for some device-management actions) device-owner provisioning.
-- iOS third-party apps cannot arbitrarily reset a device passcode, silently enable a camera or override system Find My controls. Integrate with supported Apple capabilities instead.
-- A remote command cannot reach an offline device. Queue it securely and process it after authenticated reconnection.
-- Cellular calls and SMS still require carrier service or an available network path.
-- Offline maps and AI models must be downloaded in advance.
-
-## Initial implementation sequence
+## Integration sequence
 
 1. Verify and pin upstream candidates; complete licence and security reviews.
-2. Define capability registry, command envelope and local event model.
-3. Build Android proof of concept around the best permitted assistant and voice components.
+2. Maintain shared capability, command-envelope and event contracts.
+3. Build native adapters for local inference, voice, storage and device management.
 4. Add encrypted local storage and policy-gated action execution.
-5. Build AURA Guard account/device registration and signed command queue.
-6. Add iOS and desktop clients using platform-native security APIs.
-7. Run threat modelling, permission review, offline tests and recovery drills.
+5. Deploy AURA Guard with device enrollment, signed commands and audit events.
+6. Integrate iOS, Android and desktop clients against the same service contracts.
+7. Run threat modelling, permission review, offline tests, recovery drills and device-matrix CI.
+8. At operationalization, verify platform requirements, signing, entitlements, agreements and partner approvals for each target configuration.
+
+## Verification standard
+
+A feature is not complete merely because its UI or API exists. Record separately:
+
+- implementation present;
+- unit and integration tests passing;
+- CI build passing for the target;
+- runtime capability observed on a named test configuration;
+- end-to-end behavior verified on physical hardware where applicable;
+- release approvals, signing and distribution configuration completed.
+
+Do not describe a queued command as executed, a simulator build as a signed device release, or a configured workflow as a passing build.
