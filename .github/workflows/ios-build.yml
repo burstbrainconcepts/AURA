@@ -40,4 +40,4 @@ jobs:
           name: aura-ios-simulator
           path: build/AURA-ios-simulator.zip
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 90
