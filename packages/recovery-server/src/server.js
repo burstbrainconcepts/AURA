@@ -255,6 +255,38 @@ async function route(req, res) {
     }
   }
 
+  if (req.method === "GET" && path === "/v1/commands") {
+    const account = await accountFor(req);
+    if (!account) return send(res, 401, { error: "account_auth_required" });
+    const requestedLimit = Number(url.searchParams.get("limit") || 50);
+    const limit = Number.isFinite(requestedLimit) ? Math.min(100, Math.max(1, Math.floor(requestedLimit))) : 50;
+    const result = await pool.query(
+      `SELECT c.id, c.device_id, d.label AS device_label, d.platform,
+       c.command, c.issued_at, c.expires_at, c.acknowledged_at, c.result, c.result_detail
+       FROM aura_commands c
+       JOIN aura_devices d ON d.id = c.device_id
+       WHERE c.account_id = $1
+       ORDER BY c.created_at DESC LIMIT $2`,
+      [account.id, limit]
+    );
+    return send(res, 200, { commands: result.rows });
+  }
+
+  if (req.method === "GET" && path === "/v1/audit") {
+    const account = await accountFor(req);
+    if (!account) return send(res, 401, { error: "account_auth_required" });
+    const requestedLimit = Number(url.searchParams.get("limit") || 100);
+    const limit = Number.isFinite(requestedLimit) ? Math.min(200, Math.max(1, Math.floor(requestedLimit))) : 100;
+    const result = await pool.query(
+      `SELECT id, device_id, event_type, metadata, created_at
+       FROM aura_audit_events
+       WHERE account_id = $1
+       ORDER BY created_at DESC LIMIT $2`,
+      [account.id, limit]
+    );
+    return send(res, 200, { events: result.rows });
+  }
+
   if (req.method === "GET" && path === "/v1/devices") {
     const account = await accountFor(req);
     if (!account) return send(res, 401, { error: "account_auth_required" });
