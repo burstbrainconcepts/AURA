@@ -148,11 +148,13 @@ class AuraWakeWordService : Service(), RecognitionListener {
             }
             try {
                 startActivity(launch)
-                updateNotification("Wake phrase detected • AURA activated")
             } catch (_: Exception) {
                 updateNotification("Wake phrase detected • open AURA to continue")
             }
-            scheduleRestart(2500)
+            stoppedByUser = true
+            stopListening()
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
         } else {
             scheduleRestart(350)
         }
