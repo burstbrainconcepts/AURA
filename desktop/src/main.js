@@ -19,6 +19,7 @@ let voicePcmChunks = [];
 let voiceSampleCount = 0;
 let voiceRecording = false;
 let voiceTranscribing = false;
+let voiceAutoSubmit = safeStorage.get("aura.voice.auto-submit") !== "false";
 let history = [];
 let busy = false;
 let voiceOutputEnabled = safeStorage.get("aura.voice.output.enabled") === "true";
@@ -360,12 +361,26 @@ async function finishVoiceRecording(discard = false) {
       audioBase64: btoa(binary),
       contentType: "audio/wav"
     });
-    const input = document.querySelector("#prompt");
-    if (input) {
-      input.value = [input.value.trim(), transcript.trim()].filter(Boolean).join(" ");
-      input.focus();
+    const spoken = String(transcript || "").trim();
+    if (!spoken) throw new Error("No speech was recognised. Try again.");
+    const command = spoken.toLowerCase().replace(/[.!?]+$/g, "").trim();
+    if (["end conversation", "close conversation", "go to sleep", "stop conversation", "goodbye aura"].includes(command)) {
+      history = [];
+      const messages = document.querySelector("#messages");
+      if (messages) messages.replaceChildren();
+      setVoiceInputStatus("Conversation ended. AURA is idle.");
+    } else if (voiceAutoSubmit) {
+      setVoiceInputStatus("Voice request recognised. Sending to the local model…");
+      await sendMessage(spoken);
+      setVoiceInputStatus("Voice request completed.");
+    } else {
+      const input = document.querySelector("#prompt");
+      if (input) {
+        input.value = [input.value.trim(), spoken].filter(Boolean).join(" ");
+        input.focus();
+      }
+      setVoiceInputStatus("Transcript ready. Review it and tap Send.");
     }
-    setVoiceInputStatus("Transcript ready. Review it and tap Send.");
   } catch (error) {
     setVoiceInputStatus("Offline transcription failed: " + String(error));
   } finally {
@@ -599,12 +614,20 @@ function showPanel(view) {
         <p class="hint" id="settings-result">For security, both native model bridges accept localhost endpoints only.</p>
         <p class="hint">Start whisper.cpp with its HTTP server and a local speech model on port 8081. Audio recordings are sent only to this configured localhost service.</p>
         <label class="voice-toggle"><input id="voice-output" type="checkbox" /> Speak replies using a local system voice</label>
+        <label class="voice-toggle"><input id="voice-auto-submit" type="checkbox" /> Automatically send voice transcripts</label>
+        <p class="hint">Voice recording and transcription stay on this computer through the configured local whisper.cpp service.</p>
         <p class="hint" id="voice-status"></p>
       </form>`;
     document.querySelector("#endpoint").value = endpoint;
     document.querySelector("#whisper-endpoint").value = whisperEndpoint;
     const voiceToggle = document.querySelector("#voice-output");
     voiceToggle.checked = voiceOutputEnabled;
+    const autoSubmitToggle = document.querySelector("#voice-auto-submit");
+    autoSubmitToggle.checked = voiceAutoSubmit;
+    autoSubmitToggle.addEventListener("change", () => {
+      voiceAutoSubmit = autoSubmitToggle.checked;
+      safeStorage.set("aura.voice.auto-submit", String(voiceAutoSubmit));
+    });
     document.querySelector("#voice-status").textContent = voiceStatus;
     voiceToggle.addEventListener("change", () => {
       voiceOutputEnabled = voiceToggle.checked;
