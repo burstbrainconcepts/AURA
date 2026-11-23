@@ -20,7 +20,8 @@ import java.util.Locale
 class OfflineVoiceController(
     private val activity: Activity,
     private val onTranscript: (String) -> Unit,
-    private val onStatus: (String) -> Unit
+    private val onStatus: (String) -> Unit,
+    private val onSilenceTimeout: () -> Unit
 ) : TextToSpeech.OnInitListener, RecognitionListener {
     private var recognizer: SpeechRecognizer? = null
     private var tts: TextToSpeech? = null
@@ -56,6 +57,8 @@ class OfflineVoiceController(
                 putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
                 putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+                putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 5000L)
+                putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 5000L)
             }
             onStatus("Listening on device...")
             recognizer?.startListening(intent)
@@ -108,7 +111,7 @@ class OfflineVoiceController(
     override fun onError(error: Int) {
         val message = when (error) {
             SpeechRecognizer.ERROR_NO_MATCH -> "No speech was recognised. Try again."
-            SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "No speech detected. Try again."
+            SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> { onSilenceTimeout(); "AURA went quiet and is returning to wake-word standby." }
             SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Microphone permission is required."
             else -> "Offline speech recognition error ($error)."
         }
@@ -118,7 +121,7 @@ class OfflineVoiceController(
         val text = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()
         if (!text.isNullOrBlank()) {
             onTranscript(text)
-            onStatus("Speech captured. Review it and tap Send.")
+            onStatus("Speech captured. Processing offline...")
         } else onStatus("No speech was recognised.")
     }
     override fun onPartialResults(partialResults: Bundle?) {}
