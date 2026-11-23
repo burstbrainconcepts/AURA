@@ -6,3 +6,7 @@
 .recovery-actions{display:flex;flex-wrap:wrap;gap:7px;grid-column:1/-1}.recovery-actions button{border:1px solid #344666;border-radius:8px;background:#202d49;color:#dce5ff;padding:8px 10px;font-size:11px;cursor:pointer}.recovery-actions button.danger{border-color:#70404b;background:#3a202a;color:#ffc5ce}
 
 .voice-toggle{display:flex;align-items:center;gap:10px;color:#c3cee5;font-size:12px}.voice-toggle input{width:16px;height:16px;accent-color:#829dff}
+
+#composer button.voice-button{background:#202d49;color:#dce5ff;border:1px solid #344666;padding:0 13px;min-width:58px}
+#composer button.voice-button.recording{background:#7a3445;color:#fff;border-color:#b65a70}
+#composer button:disabled{opacity:.55;cursor:wait}

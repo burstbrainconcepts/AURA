@@ -3,7 +3,8 @@
 use aes_gcm::{aead::{Aead, KeyInit}, Aes256Gcm, Nonce};
 use pbkdf2::pbkdf2_hmac;
 use rand::RngCore;
-use reqwest::Url;
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
+use reqwest::{multipart::{Form, Part}, Url};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::Sha256;
@@ -277,9 +278,54 @@ async fn local_chat(base_url: String, messages: Vec<ChatMessage>) -> Result<Stri
         .ok_or_else(|| "Local inference returned no answer".into())
 }
 
+
+#[tauri::command]
+async fn local_transcribe(base_url: String, audio_base64: String, content_type: String) -> Result<String, String> {
+    if audio_base64.len() > 28_000_000 {
+        return Err("Audio recording exceeds the encoded size limit".into());
+    }
+    let audio = BASE64.decode(audio_base64.as_bytes())
+        .map_err(|_| "Audio recording was not valid base64 data".to_string())?;
+    if audio.len() < 512 || audio.len() > 20 * 1024 * 1024 {
+        return Err("Audio recording must be between 512 bytes and 20 MB".into());
+    }
+    let mime = content_type.split(';').next().unwrap_or("").trim().to_ascii_lowercase();
+    let (mime, filename) = match mime.as_str() {
+        "audio/webm" => ("audio/webm", "aura-recording.webm"),
+        "audio/ogg" => ("audio/ogg", "aura-recording.ogg"),
+        "audio/mp4" => ("audio/mp4", "aura-recording.mp4"),
+        "audio/wav" | "audio/x-wav" => ("audio/wav", "aura-recording.wav"),
+        _ => return Err("Unsupported audio format from the microphone recorder".into()),
+    };
+    let mut url = validate_local_url(&base_url)?;
+    url.set_path(&format!("{}/inference", url.path().trim_end_matches('/')));
+    let part = Part::bytes(audio).file_name(filename)
+        .mime_str(mime).map_err(|_| "Unsupported audio content type".to_string())?;
+    let form = Form::new()
+        .part("file", part)
+        .text("temperature", "0.0")
+        .text("response_format", "json");
+    let client = reqwest::Client::builder().timeout(Duration::from_secs(180)).build()
+        .map_err(|e| e.to_string())?;
+    let response = client.post(url).multipart(form).send().await
+        .map_err(|e| format!("Local whisper.cpp request failed: {e}"))?;
+    if !response.status().is_success() {
+        return Err(format!("Local whisper.cpp returned HTTP {}", response.status()));
+    }
+    let result: Value = response.json().await
+        .map_err(|_| "Local whisper.cpp returned an invalid JSON response".to_string())?;
+    let transcript = result.get("text").and_then(Value::as_str)
+        .or_else(|| result.get("transcription").and_then(Value::as_str))
+        .unwrap_or_default().trim().to_string();
+    if transcript.is_empty() {
+        return Err("The local speech model returned no transcript".into());
+    }
+    Ok(transcript)
+}
+
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![local_health, local_chat, memory_load, memory_save, memory_clear, recovery_list_devices, recovery_queue_command, recovery_revoke_device, recovery_clear_location])
+        .invoke_handler(tauri::generate_handler![local_health, local_chat, local_transcribe, memory_load, memory_save, memory_clear, recovery_list_devices, recovery_queue_command, recovery_revoke_device, recovery_clear_location])
         .run(tauri::generate_context!())
         .expect("error while running AURA desktop");
 }

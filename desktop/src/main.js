@@ -4,6 +4,13 @@ import "./style.css";
 const app = document.querySelector("#app");
 const DEFAULT_ENDPOINT = "http://127.0.0.1:8080";
 let endpoint = localStorage.getItem("aura.inference.endpoint") || DEFAULT_ENDPOINT;
+let whisperEndpoint = localStorage.getItem("aura.voice.input.endpoint") || "http://127.0.0.1:8081";
+let voiceInputStatus = "Offline voice input is ready when a local whisper.cpp server is running.";
+let voiceRecorder = null;
+let voiceStream = null;
+let voiceChunks = [];
+let voiceRecording = false;
+let voiceTranscribing = false;
 let history = [];
 let busy = false;
 let voiceOutputEnabled = localStorage.getItem("aura.voice.output.enabled") === "true";
@@ -118,10 +125,12 @@ function showAssistant() {
   panel.innerHTML = `
     <div class="panel-head"><div><h3>Start a conversation</h3><p class="muted">Your prompts are sent to your configured local llama.cpp server.</p></div><span class="tag" id="runtime-tag">Not connected</span></div>
     <div class="messages" id="messages"><p class="empty">Your conversation will appear here.</p></div>
-    <form id="composer"><input id="prompt" autocomplete="off" placeholder="Ask AURA anything..." aria-label="Message AURA" /><button type="submit" id="send">Send <span>↗</span></button></form>
-    <p class="hint" id="endpoint-hint">Local endpoint configured</p>`;
-  document.querySelector("#endpoint-hint").textContent = "Local endpoint: " + endpoint;
+    <form id="composer"><input id="prompt" autocomplete="off" placeholder="Ask AURA anything..." aria-label="Message AURA" /><button type="button" id="record" class="voice-button" aria-label="Start offline voice input">Mic</button><button type="submit" id="send">Send <span>↗</span></button></form>
+    <p class="hint" id="endpoint-hint">Local endpoint configured</p><p class="hint" id="voice-status"></p>`;
+  document.querySelector("#endpoint-hint").textContent = "Local model: " + endpoint;
+  document.querySelector("#voice-status").textContent = voiceInputStatus;
   const input = document.querySelector("#prompt");
+  document.querySelector("#record").addEventListener("click", toggleVoiceRecording);
   document.querySelector("#composer").addEventListener("submit", (event) => {
     event.preventDefault();
     const value = input.value.trim();
@@ -246,6 +255,108 @@ async function renderMemoryPanel() {
 }
 
 
+
+
+function setVoiceInputStatus(message) {
+  voiceInputStatus = message;
+  const status = document.querySelector("#voice-status");
+  if (status) status.textContent = message;
+}
+function updateRecordButton() {
+  const button = document.querySelector("#record");
+  if (!button) return;
+  button.textContent = voiceRecording ? "Stop" : "Mic";
+  button.classList.toggle("recording", voiceRecording);
+  button.disabled = voiceTranscribing;
+  button.setAttribute("aria-label", voiceRecording ? "Stop recording" : "Start offline voice input");
+}
+function stopVoiceStream() {
+  if (voiceStream) voiceStream.getTracks().forEach((track) => track.stop());
+  voiceStream = null;
+}
+async function toggleVoiceRecording() {
+  if (voiceRecording && voiceRecorder) {
+    voiceRecorder.stop();
+    return;
+  }
+  if (voiceTranscribing) return;
+  if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+    setVoiceInputStatus("Microphone recording is unavailable in this desktop runtime.");
+    return;
+  }
+  try {
+    voiceStream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+    });
+    const candidates = ["audio/webm;codecs=opus", "audio/ogg;codecs=opus", "audio/mp4"];
+    const mimeType = candidates.find((candidate) => MediaRecorder.isTypeSupported(candidate));
+    voiceRecorder = mimeType ? new MediaRecorder(voiceStream, { mimeType }) : new MediaRecorder(voiceStream);
+    voiceChunks = [];
+    voiceRecorder.ondataavailable = (event) => {
+      if (event.data && event.data.size) voiceChunks.push(event.data);
+    };
+    voiceRecorder.onerror = () => {
+      voiceRecording = false;
+      stopVoiceStream();
+      updateRecordButton();
+      setVoiceInputStatus("Microphone recording failed. Check the system microphone permission.");
+    };
+    voiceRecorder.onstop = async () => {
+      const recordedType = voiceRecorder?.mimeType || "audio/webm";
+      const blob = new Blob(voiceChunks, { type: recordedType });
+      voiceRecorder = null;
+      voiceChunks = [];
+      voiceRecording = false;
+      stopVoiceStream();
+      voiceTranscribing = true;
+      updateRecordButton();
+      setVoiceInputStatus("Transcribing locally with whisper.cpp…");
+      try {
+        if (blob.size < 512) throw new Error("The recording was too short. Try speaking for longer.");
+        if (blob.size > 20 * 1024 * 1024) throw new Error("Recording exceeds the 20 MB safety limit. Record a shorter message.");
+        const bytes = new Uint8Array(await blob.arrayBuffer());
+        let binary = "";
+        for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+          binary += String.fromCharCode(...bytes.subarray(offset, Math.min(offset + 0x8000, bytes.length)));
+        }
+        const transcript = await invoke("local_transcribe", {
+          baseUrl: whisperEndpoint,
+          audioBase64: btoa(binary),
+          contentType: blob.type || "audio/webm"
+        });
+        const input = document.querySelector("#prompt");
+        if (input) {
+          input.value = [input.value.trim(), transcript.trim()].filter(Boolean).join(" ");
+          input.focus();
+        }
+        setVoiceInputStatus("Transcript ready. Review it and tap Send.");
+      } catch (error) {
+        setVoiceInputStatus("Offline transcription failed: " + String(error));
+      } finally {
+        voiceTranscribing = false;
+        updateRecordButton();
+      }
+    };
+    voiceRecorder.start(250);
+    voiceRecording = true;
+    updateRecordButton();
+    setVoiceInputStatus("Recording on this device. Tap Stop when you finish speaking.");
+  } catch (error) {
+    stopVoiceStream();
+    voiceRecording = false;
+    updateRecordButton();
+    setVoiceInputStatus("Microphone unavailable: " + String(error));
+  }
+}
+function stopVoiceRecording() {
+  if (voiceRecorder && voiceRecorder.state !== "inactive") {
+    try { voiceRecorder.stop(); } catch { stopVoiceStream(); }
+  } else {
+    stopVoiceStream();
+    voiceRecording = false;
+    updateRecordButton();
+  }
+}
 
 function speakReply(text) {
   if (!voiceOutputEnabled) return;
@@ -389,14 +500,18 @@ function showPanel(view) {
     panel.innerHTML = `
       <div class="panel-head"><div><h3>Local AI runtime</h3><p class="muted">Configure the llama.cpp OpenAI-compatible server running on this computer.</p></div></div>
       <form id="settings-form" class="settings-form">
-        <label for="endpoint">Inference server URL</label>
+        <label for="endpoint">Local llama.cpp inference URL</label>
         <input id="endpoint" spellcheck="false" autocomplete="url" />
+        <label for="whisper-endpoint">Local whisper.cpp speech URL</label>
+        <input id="whisper-endpoint" spellcheck="false" autocomplete="url" />
         <div class="settings-actions"><button type="submit">Save endpoint</button><button type="button" id="test-endpoint" class="secondary">Test connection</button></div>
-        <p class="hint" id="settings-result">For security, the desktop native bridge currently accepts localhost endpoints only.</p>
+        <p class="hint" id="settings-result">For security, both native model bridges accept localhost endpoints only.</p>
+        <p class="hint">Start whisper.cpp with its HTTP server and a local speech model on port 8081. Audio recordings are sent only to this configured localhost service.</p>
         <label class="voice-toggle"><input id="voice-output" type="checkbox" /> Speak replies using a local system voice</label>
         <p class="hint" id="voice-status"></p>
       </form>`;
     document.querySelector("#endpoint").value = endpoint;
+    document.querySelector("#whisper-endpoint").value = whisperEndpoint;
     const voiceToggle = document.querySelector("#voice-output");
     voiceToggle.checked = voiceOutputEnabled;
     document.querySelector("#voice-status").textContent = voiceStatus;
@@ -410,11 +525,17 @@ function showPanel(view) {
     document.querySelector("#settings-form").addEventListener("submit", async (event) => {
       event.preventDefault();
       const next = document.querySelector("#endpoint").value.trim();
+      const nextWhisper = document.querySelector("#whisper-endpoint").value.trim();
       try {
         const parsed = new URL(next);
-        if (!["http:", "https:"].includes(parsed.protocol) || !["localhost", "127.0.0.1", "[::1]"].includes(parsed.hostname)) throw new Error("Use a localhost URL such as http://127.0.0.1:8080");
+        const whisperParsed = new URL(nextWhisper);
+        const localHosts = ["localhost", "127.0.0.1", "[::1]"];
+        if (!["http:", "https:"].includes(parsed.protocol) || !localHosts.includes(parsed.hostname) || parsed.username || parsed.password || parsed.search || parsed.hash) throw new Error("Use a credential-free localhost inference URL such as http://127.0.0.1:8080");
+        if (!["http:", "https:"].includes(whisperParsed.protocol) || !localHosts.includes(whisperParsed.hostname) || whisperParsed.username || whisperParsed.password || whisperParsed.search || whisperParsed.hash) throw new Error("Use a credential-free localhost whisper.cpp URL such as http://127.0.0.1:8081");
         endpoint = next.replace(/\/$/, "");
+        whisperEndpoint = nextWhisper.replace(/\/$/, "");
         localStorage.setItem("aura.inference.endpoint", endpoint);
+        localStorage.setItem("aura.voice.input.endpoint", whisperEndpoint);
         document.querySelector("#settings-result").textContent = "Endpoint saved.";
         await checkEngine();
       } catch (error) {
@@ -437,9 +558,11 @@ function showPanel(view) {
 document.querySelectorAll(".nav").forEach((button) => button.addEventListener("click", () => {
   document.querySelectorAll(".nav").forEach((item) => item.classList.toggle("active", item === button));
   const view = button.dataset.view;
+  if (voiceRecording) stopVoiceRecording();
   heading.textContent = labels[view];
   welcome.hidden = view !== "assistant";
   showPanel(view);
 }));
 showAssistant();
 checkEngine();
+window.addEventListener("beforeunload", () => { stopVoiceRecording(); if ("speechSynthesis" in window) window.speechSynthesis.cancel(); });
