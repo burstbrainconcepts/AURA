@@ -65,6 +65,8 @@ class MainActivity : Activity() {
 
     companion object {
         const val EXTRA_START_LISTENING = "com.burstbrainconcepts.aura.extra.START_LISTENING"
+        const val EXTRA_VOICE_PROMPT = "com.burstbrainconcepts.aura.extra.VOICE_PROMPT"
+        private const val REQUEST_WAKE_AUDIO = 7413
         private const val REQUEST_DEVICE_ADMIN = 7411
         private const val REQUEST_LOCATION_PERMISSION = 7412
     }
@@ -441,6 +443,55 @@ class MainActivity : Activity() {
         if (!pendingHandsFreeListen) return
         pendingHandsFreeListen = false
         window.decorView.postDelayed({ voice.startListening() }, 350)
+    }
+
+
+    private fun wakeListeningEnabled(): Boolean =
+        getSharedPreferences("aura_presence", MODE_PRIVATE).getBoolean("wake_enabled", false)
+
+    private fun toggleWakeListening() {
+        if (wakeListeningEnabled()) {
+            stopService(Intent(this, AuraWakeWordService::class.java).setAction(AuraWakeWordService.ACTION_STOP))
+            getSharedPreferences("aura_presence", MODE_PRIVATE).edit().putBoolean("wake_enabled", false).apply()
+            wakeButton.text = "Enable Hey AURA wake listening"
+            status.text = "Hey AURA listening paused."
+            return
+        }
+        if (Build.VERSION.SDK_INT < 31 || !android.speech.SpeechRecognizer.isOnDeviceRecognitionAvailable(this)) {
+            AlertDialog.Builder(this).setTitle("On-device wake listening unavailable")
+                .setMessage("This phone does not currently report support for Android on-device speech recognition. AURA will not switch to cloud listening.")
+                .setPositiveButton("OK", null).show()
+            return
+        }
+        if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(android.Manifest.permission.RECORD_AUDIO), REQUEST_WAKE_AUDIO)
+            return
+        }
+        startWakeService()
+    }
+
+    private fun startWakeService() {
+        val serviceIntent = Intent(this, AuraWakeWordService::class.java).setAction(AuraWakeWordService.ACTION_START)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(serviceIntent) else startService(serviceIntent)
+            getSharedPreferences("aura_presence", MODE_PRIVATE).edit().putBoolean("wake_enabled", true).apply()
+            wakeButton.text = "Disable Hey AURA wake listening"
+            status.text = "AURA is listening for Hey AURA on-device. Use the notification to pause."
+        } catch (error: Exception) {
+            status.text = "Could not start wake listening: " + (error.message ?: "permission or system restriction")
+        }
+    }
+
+    private fun submitWakePrompt() {
+        val prompt = pendingWakePrompt.trim()
+        if (prompt.isEmpty() || !modelReady) return
+        pendingWakePrompt = ""
+        input.setText(prompt)
+        sendMessage()
+    }
+
+    private fun resumeWakeListening() {
+        if (wakeListeningEnabled()) window.decorView.postDelayed({ startWakeService() }, 900)
     }
 
     private fun toggleFloatingAssistant() {
