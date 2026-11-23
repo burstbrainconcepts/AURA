@@ -25,9 +25,9 @@ class AuraFloatingAssistantService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == ACTION_HIDE) {
-            removeBubble()
-            stopSelf()
+        if (intent?.action == ACTION_HIDE_SESSION || intent?.action == ACTION_HIDE) {
+            removeBubble(intent.action == ACTION_HIDE)
+            if (intent.action == ACTION_HIDE) stopSelf()
             return START_NOT_STICKY
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
@@ -64,7 +64,8 @@ class AuraFloatingAssistantService : Service() {
             setPadding(0, 2, 14, 2)
             setOnClickListener {
                 val intent = packageManager.getLaunchIntentForPackage(packageName)
-                intent?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                intent?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                intent?.putExtra(MainActivity.EXTRA_START_LISTENING, true)
                 if (intent != null) startActivity(intent)
             }
         }
@@ -109,8 +110,8 @@ class AuraFloatingAssistantService : Service() {
         }
     }
 
-    private fun removeBubble() {
-        getSharedPreferences("aura_presence", MODE_PRIVATE).edit().putBoolean("floating_enabled", false).apply()
+    private fun removeBubble(disableFeature: Boolean = false) {
+        if (disableFeature) getSharedPreferences("aura_presence", MODE_PRIVATE).edit().putBoolean("floating_enabled", false).apply()
         val current = bubble ?: return
         try {
             windowManager?.removeView(current)
@@ -129,5 +130,7 @@ class AuraFloatingAssistantService : Service() {
     companion object {
         const val ACTION_SHOW = "com.burstbrainconcepts.aura.action.SHOW_FLOATING"
         const val ACTION_HIDE = "com.burstbrainconcepts.aura.action.HIDE_FLOATING"
+        const val ACTION_SHOW_SESSION = "com.burstbrainconcepts.aura.action.SHOW_SESSION"
+        const val ACTION_HIDE_SESSION = "com.burstbrainconcepts.aura.action.HIDE_SESSION"
     }
 }
