@@ -4,6 +4,8 @@ const disconnectButton = document.querySelector("#disconnect");
 const refreshButton = document.querySelector("#refresh");
 const statusNode = document.querySelector("#status");
 const devicesNode = document.querySelector("#devices");
+const commandsNode = document.querySelector("#commands");
+const auditNode = document.querySelector("#audit");
 let accountToken = "";
 
 function setStatus(message, error = false) {
@@ -112,12 +114,65 @@ function renderDevices(devices) {
   }
 }
 
+function renderCommands(commands) {
+  commandsNode.replaceChildren();
+  if (!commands.length) {
+    addText(commandsNode, "div", "No recovery commands have been issued yet.", "empty");
+    return;
+  }
+  for (const command of commands) {
+    const item = document.createElement("article");
+    item.className = "activity-item";
+    const state = command.acknowledged_at
+      ? `Acknowledged · ${command.result || "unknown"}`
+      : new Date(command.expires_at).getTime() <= Date.now() ? "Expired · not acknowledged" : "Queued · awaiting device";
+    addText(item, "strong", command.command || "Unknown command");
+    addText(item, "span", state, "activity-state");
+    addText(item, "p", `${command.device_label || command.device_id} · ${command.platform || "device"}`, "device-meta");
+    addText(item, "p", `Issued ${formatDate(command.issued_at)} · Expires ${formatDate(command.expires_at)}`, "device-meta");
+    if (command.result_detail) addText(item, "p", command.result_detail, "activity-detail");
+    commandsNode.append(item);
+  }
+}
+
+function renderAudit(events) {
+  auditNode.replaceChildren();
+  if (!events.length) {
+    addText(auditNode, "div", "No audit events have been recorded yet.", "empty");
+    return;
+  }
+  for (const event of events) {
+    const item = document.createElement("article");
+    item.className = "activity-item";
+    addText(item, "strong", String(event.event_type || "event").replaceAll(".", " "));
+    addText(item, "span", formatDate(event.created_at), "activity-state");
+    addText(item, "p", event.device_id ? `Device · ${event.device_id}` : "Account event", "device-meta");
+    if (event.metadata && Object.keys(event.metadata).length) {
+      const detail = Object.entries(event.metadata).map(([key, value]) => `${key}: ${typeof value === "string" ? value : JSON.stringify(value)}`).join(" · ");
+      addText(item, "p", detail, "activity-detail");
+    }
+    auditNode.append(item);
+  }
+}
+
+async function loadActivity() {
+  try {
+    const [commands, audit] = await Promise.all([api("/v1/commands?limit=50"), api("/v1/audit?limit=100")]);
+    renderCommands(Array.isArray(commands.commands) ? commands.commands : []);
+    renderAudit(Array.isArray(audit.events) ? audit.events : []);
+  } catch (error) {
+    addText(commandsNode, "p", error.message, "empty");
+    addText(auditNode, "p", error.message, "empty");
+  }
+}
+
 async function loadDevices() {
   setStatus("Loading your device registry...");
   try {
     const payload = await api("/v1/devices");
     renderDevices(Array.isArray(payload.devices) ? payload.devices : []);
     setStatus(`${payload.devices?.length || 0} enrolled device(s) loaded.`);
+    await loadActivity();
   } catch (error) {
     setStatus(error.message, true);
   }
@@ -192,6 +247,8 @@ connectButton.addEventListener("click", async () => {
 disconnectButton.addEventListener("click", () => {
   accountToken = "";
   devicesNode.replaceChildren();
+  commandsNode.replaceChildren();
+  auditNode.replaceChildren();
   disconnectButton.disabled = true;
   refreshButton.disabled = true;
   setStatus("Disconnected. The account token has been cleared from this page.");
