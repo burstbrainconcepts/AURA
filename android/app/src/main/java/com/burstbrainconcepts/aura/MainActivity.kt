@@ -118,330 +118,364 @@ class MainActivity : Activity() {
     }
 
     private fun buildInterface() {
-        val ink = 0xFF100B2E.toInt()
-        val deepPurple = 0xFF1B1245.toInt()
-        val purple = 0xFF6D4AFF.toInt()
-        val lavender = 0xFFB9A7FF.toInt()
-        val white = 0xFFF9F7FF.toInt()
-        val muted = 0xFFBDB5D8.toInt()
-        val line = 0xFF352A62.toInt()
+        val ink = 0xFF10071F.toInt()
+        val panel = 0xFF1A1034.toInt()
+        val panel2 = 0xFF261746.toInt()
+        val purple = 0xFF702BFF.toInt()
+        val lavender = 0xFFC9A8FF.toInt()
+        val white = 0xFFFFFCFF.toInt()
+        val muted = 0xFFBDB1CE.toInt()
+        val paper = 0xFFF8F6FC.toInt()
+        val darkText = 0xFF20172E.toInt()
+        val greyText = 0xFF71687D.toInt()
 
-        fun label(text: String, size: Float = 14f, color: Int = white): TextView =
+        fun rounded(color: Int, radius: Float = 22f, stroke: Int = 0): android.graphics.drawable.GradientDrawable =
+            android.graphics.drawable.GradientDrawable().apply {
+                setColor(color)
+                cornerRadius = radius * resources.displayMetrics.density
+                if (stroke != 0) setStroke((1 * resources.displayMetrics.density).toInt().coerceAtLeast(1), stroke)
+            }
+        fun text(value: String, size: Float = 14f, color: Int = white, bold: Boolean = false): TextView =
             TextView(this).apply {
-                this.text = text
+                text = value
                 textSize = size
                 setTextColor(color)
-                setPadding(0, 8, 0, 8)
+                if (bold) setTypeface(typeface, android.graphics.Typeface.BOLD)
+                setPadding(0, 4, 0, 4)
+                setLineSpacing(1f, 1.03f)
             }
-
-        fun actionButton(textValue: String, primary: Boolean = false, onClick: () -> Unit): Button =
+        fun button(value: String, primary: Boolean = false, action: () -> Unit): Button =
             Button(this).apply {
-                text = textValue
+                text = value
                 isAllCaps = false
-                textSize = 14f
+                textSize = 13f
                 setTextColor(white)
-                backgroundTintList = android.content.res.ColorStateList.valueOf(if (primary) purple else 0xFF302653.toInt())
+                background = rounded(if (primary) purple else panel2, 18f)
+                stateListAnimator = null
                 setPadding(14, 10, 14, 10)
-                setOnClickListener { onClick() }
+                setOnClickListener { action() }
             }
-
-        fun section(title: String): TextView = label(title, 12f, lavender).apply {
-            letterSpacing = 0.12f
-            setPadding(0, 18, 0, 6)
+        fun card(color: Int = panel): LinearLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(18, 16, 18, 16)
+            background = rounded(color, 22f)
         }
-
-        fun pageScroll(content: LinearLayout): ScrollView = ScrollView(this).apply {
+        fun section(value: String, color: Int = lavender): TextView =
+            text(value.uppercase(), 11f, color, true).apply {
+                letterSpacing = .13f
+                setPadding(2, 18, 2, 8)
+            }
+        fun column(light: Boolean = false): LinearLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(18, 12, 18, 26)
+            setBackgroundColor(if (light) paper else ink)
+        }
+        fun scroll(content: LinearLayout): ScrollView = ScrollView(this).apply {
             isFillViewport = true
+            clipToPadding = false
             setBackgroundColor(ink)
-            addView(content, ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-            ))
+            addView(content, ViewGroup.LayoutParams(-1, -2))
         }
-
-        fun pageColumn(): LinearLayout = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(20, 12, 20, 24)
-            setBackgroundColor(ink)
-        }
-
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setBackgroundColor(ink)
-        }
-
-        val top = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(22, 8, 22, 12)
-            setBackgroundColor(ink)
-        }
-        val brandRow = LinearLayout(this).apply {
+        fun row(): LinearLayout = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = android.view.Gravity.CENTER_VERTICAL
         }
-        val mark = TextView(this).apply {
-            text = "✦"
-            textSize = 28f
-            setTextColor(lavender)
-            setPadding(0, 0, 12, 0)
+        fun spacer(height: Int = 10) = View(this).apply {
+            layoutParams = LinearLayout.LayoutParams(1, (height * resources.displayMetrics.density).toInt())
         }
-        val heading = TextView(this).apply {
-            text = "AURA"
-            textSize = 25f
-            letterSpacing = 0.16f
-            setTextColor(white)
-        }
-        val privateTag = TextView(this).apply {
-            text = "PRIVATE AI"
-            textSize = 10f
-            setTextColor(lavender)
-            setPadding(12, 0, 0, 0)
-        }
-        brandRow.addView(mark)
-        brandRow.addView(heading)
-        brandRow.addView(privateTag)
-        status = TextView(this).apply {
-            text = "Your private assistant"
-            textSize = 12f
-            setTextColor(muted)
-            setPadding(0, 4, 0, 0)
-        }
-        top.addView(brandRow)
-        top.addView(status)
 
-        val pageHost = LinearLayout(this).apply {
+        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(ink) }
+        val top = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
+            setPadding(20, 8, 20, 12)
             setBackgroundColor(ink)
         }
+        val brand = row()
+        brand.addView(text("◢", 25f, lavender, true))
+        brand.addView(text(" AURA", 22f, white, true))
+        val brandSpacer = View(this)
+        brand.addView(brandSpacer, LinearLayout.LayoutParams(0, 1, 1f))
+        brand.addView(text("✦", 19f, lavender))
+        top.addView(brand)
+        status = text("Your private AI assistant", 11f, muted)
+        top.addView(status)
+
+        val pageHost = FrameLayout(this).apply { setBackgroundColor(ink) }
         val navigation = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            setPadding(8, 8, 8, 12)
-            setBackgroundColor(deepPurple)
+            gravity = android.view.Gravity.CENTER
+            setPadding(7, 7, 7, 8)
+            background = rounded(0xFF160D2D.toInt(), 0f)
         }
         val pageViews = linkedMapOf<String, ScrollView>()
         val navButtons = linkedMapOf<String, Button>()
 
-        // HOME
-        val home = pageColumn()
-        home.addView(label("Good to see you.", 25f, white))
-        home.addView(label("Your assistant. Your device. Your privacy.", 14f, muted))
-        val hero = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(18, 18, 18, 18)
-            setBackgroundColor(deepPurple)
+        // HOME — branded dashboard with shortcuts and status cards.
+        val home = column()
+        home.addView(text("Good morning, Ephraim 👋", 23f, white, true))
+        home.addView(text("How can I help you today?", 14f, muted))
+        home.addView(spacer(12))
+        val quick = row()
+        listOf("▣\nChat", "♩\nVoice", "✎\nCreate", "⌘\nTools").forEach { item ->
+            val tile = TextView(this).apply {
+                text = item
+                gravity = android.view.Gravity.CENTER
+                textSize = 13f
+                setTextColor(white)
+                background = rounded(panel2, 17f)
+                setPadding(8, 14, 8, 14)
+            }
+            quick.addView(tile, LinearLayout.LayoutParams(0, (76 * resources.displayMetrics.density).toInt(), 1f).apply {
+                marginEnd = (7 * resources.displayMetrics.density).toInt()
+            })
+            tile.setOnClickListener { showPage("Chat"); if (item.contains("Voice")) voice.startListening() }
         }
-        hero.addView(label("AURA IS YOURS", 11f, lavender))
-        hero.addView(label("Think freely. Ask anything.", 21f, white))
-        hero.addView(label("Chat privately with your on-device AI. Once the model is installed, core conversations work offline.", 13f, muted))
-        hero.addView(actionButton("Start a conversation  →", true) { showPage("Chat") })
+        home.addView(quick)
+        home.addView(spacer(14))
+        val hero = card(panel)
+        hero.addView(text("AURA PRO", 11f, lavender, true))
+        hero.addView(text("Your all-in-one AI assistant", 20f, white, true))
+        hero.addView(text("Work, study, creativity and automation — privately on your device.", 13f, muted))
+        hero.addView(spacer(8))
+        hero.addView(button("Chat with AURA  →", true) { showPage("Chat") })
         home.addView(hero)
-        home.addView(section("QUICK ACCESS"))
-        home.addView(actionButton("✦  Chat with AURA") { showPage("Chat") })
-        home.addView(actionButton("⇩  Model downloads & updates") { showPage("Downloads") })
-        home.addView(actionButton("⚙  Privacy & device settings") { showPage("Settings") })
+        home.addView(section("QUICK ACTIONS"))
+        val actions = row()
+        listOf("Summarize", "Write", "Translate", "Code").forEach { item ->
+            val t = TextView(this).apply {
+                text = "✧\n$item"
+                gravity = android.view.Gravity.CENTER
+                textSize = 11f
+                setTextColor(darkText)
+                background = rounded(paper, 15f)
+                setPadding(4, 14, 4, 14)
+            }
+            actions.addView(t, LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = 6 })
+            t.setOnClickListener { showPage("Chat"); input.setText("$item: ") ; input.requestFocus() }
+        }
+        home.addView(actions)
         home.addView(section("YOUR DEVICE"))
-        home.addView(label("Offline model: checking status…", 13f, muted).also { deviceModelSummary = it })
-        home.addView(label("Memory is private and off until you enable it. Location sharing is off by default.", 13f, muted))
+        val deviceCard = card(panel2)
+        deviceModelSummary = text("Offline model: checking status…", 13f, white)
+        deviceCard.addView(deviceModelSummary)
+        deviceCard.addView(text("Memory stays private and off until you enable it. Location sharing is off by default.", 12f, muted))
+        home.addView(deviceCard)
 
-        // CHAT
-        val chat = pageColumn()
-        chat.addView(label("Chat", 24f, white))
-        chat.addView(label("A private conversation, stored on this device.", 13f, muted))
+        // CHAT — persistent conversation area and compact composer.
+        val chat = column()
+        chat.addView(text("Chat with AURA", 23f, white, true))
+        chat.addView(text("Your private conversation, stored on this device.", 12f, muted))
         transcript = TextView(this).apply {
-            text = "Welcome to AURA. Your conversation will appear here. Download the starter model to begin chatting offline.\n"
-            textSize = 15f
+            text = "Welcome to AURA. Download the starter model to begin chatting offline."
+            textSize = 14f
             setTextColor(white)
-            setPadding(14, 16, 14, 16)
-            setBackgroundColor(deepPurple)
+            setPadding(15, 16, 15, 16)
+            background = rounded(panel, 18f)
         }
         val transcriptScroll = ScrollView(this).apply {
-            addView(transcript)
             isFillViewport = true
+            clipToPadding = false
+            addView(transcript, ViewGroup.LayoutParams(-1, -2))
         }
-        chat.addView(transcriptScroll, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
-        ))
+        chat.addView(transcriptScroll, LinearLayout.LayoutParams(-1, 0, 1f))
         input = EditText(this).apply {
             hint = "Message AURA…"
             setTextColor(white)
             setHintTextColor(muted)
-            setSingleLine(false)
+            textSize = 14f
             maxLines = 4
             isEnabled = false
-            setPadding(14, 12, 14, 12)
-            setBackgroundColor(deepPurple)
+            setPadding(16, 13, 16, 13)
+            background = rounded(panel2, 24f)
         }
         chat.addView(input)
-        val voiceControls = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        mic = actionButton("🎙  Speak") { voice.startListening() }.apply { isEnabled = false }
-        speakToggle = actionButton("Voice replies: off") {
+        chat.addView(spacer(8))
+        val controls = row()
+        mic = button("🎙  Voice", false) { voice.startListening() }.apply { isEnabled = false }
+        speakToggle = button("Voice replies: on") {
             speakReplies = !speakReplies
             speakToggle.text = if (speakReplies) "Voice replies: on" else "Voice replies: off"
             if (!speakReplies) voice.stopSpeaking()
         }.apply { isEnabled = false }
-        voiceControls.addView(mic, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        voiceControls.addView(speakToggle, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        chat.addView(voiceControls)
-        send = actionButton("Send message", true) { sendMessage() }.apply { isEnabled = false }
+        controls.addView(mic, LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = 7 })
+        controls.addView(speakToggle, LinearLayout.LayoutParams(0, -2, 1f))
+        chat.addView(controls)
+        send = button("Send message  ➤", true) { sendMessage() }.apply { isEnabled = false }
         chat.addView(send)
 
-        // DOWNLOADS
-        val downloads = pageColumn()
-        downloads.addView(label("Downloads & updates", 24f, white))
-        downloads.addView(label("Manage the AI model that powers offline conversations.", 13f, muted))
-        val modelCard = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(18, 18, 18, 18)
-            setBackgroundColor(deepPurple)
+        // DOWNLOADS — light product cards like the reference design.
+        val downloads = column(true)
+        downloads.addView(text("Downloads", 24f, darkText, true))
+        downloads.addView(text("Manage your AI models and updates.", 13f, greyText))
+        downloads.addView(spacer(10))
+        val tabs = row()
+        listOf("AI Models", "Updates", "Assets").forEachIndexed { index, name ->
+            val t = TextView(this).apply {
+                text = name
+                gravity = android.view.Gravity.CENTER
+                textSize = 11f
+                setTextColor(if (index == 0) white else greyText)
+                background = rounded(if (index == 0) purple else 0xFFEAE6F1.toInt(), 12f)
+                setPadding(8, 12, 8, 12)
+            }
+            tabs.addView(t, LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = 5 })
         }
-        modelCard.addView(label("AURA STARTER MODEL", 11f, lavender))
-        modelCard.addView(label("On-device AI • Qwen 0.5B", 18f, white))
-        modelCard.addView(label("Approximately 397 MB • CPU mode • Works offline after setup", 12f, muted))
-        download = actionButton("Download model", true) {
+        downloads.addView(tabs)
+        downloads.addView(spacer(10))
+        val modelCard = card(white)
+        val modelHead = row()
+        modelHead.addView(text("⬡", 28f, purple, true))
+        val modelInfo = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(12, 0, 0, 0) }
+        modelInfo.addView(text("AURA Lite", 16f, darkText, true))
+        modelInfo.addView(text("397 MB  •  v1.0.0", 11f, greyText))
+        modelHead.addView(modelInfo, LinearLayout.LayoutParams(0, -2, 1f))
+        modelHead.addView(text(if (modelReady) "RUNNING" else "STARTER", 10f, if (modelReady) 0xFF159B62.toInt() else purple, true))
+        modelCard.addView(modelHead)
+        modelCard.addView(text("Fast, efficient and works offline after setup.", 12f, greyText))
+        download = button("Download model", true) {
             if (downloadPaused) continueModelDownload() else confirmModelDownload()
         }
         modelCard.addView(download)
         downloadProgress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
-            max = 1000
-            progress = 0
-            visibility = ViewGroup.GONE
+            max = 1000; progress = 0; visibility = ViewGroup.GONE
         }
         modelCard.addView(downloadProgress)
-        pauseDownload = actionButton("Pause download") { pauseModelDownload() }.apply {
-            visibility = ViewGroup.GONE
-        }
+        pauseDownload = button("Ⅱ  Pause download") { pauseModelDownload() }.apply { visibility = ViewGroup.GONE }
         modelCard.addView(pauseDownload)
         downloads.addView(modelCard)
-        downloads.addView(section("DOWNLOAD BEHAVIOUR"))
-        downloads.addView(label("Downloads can be paused and resumed. AURA verifies the model checksum before loading it.", 13f, muted))
-        downloads.addView(label("App updates are delivered through a newer AURA installer. This screen currently manages the AI model download.", 12f, muted))
+        downloads.addView(section("STORAGE", greyText))
+        val storage = card(white)
+        storage.addView(text("Device storage", 14f, darkText, true))
+        storage.addView(text("Model storage is managed on this device. Download size: approximately 397 MB.", 12f, greyText))
+        downloads.addView(storage)
+        downloads.addView(section("DOWNLOAD BEHAVIOUR", greyText))
+        downloads.addView(text("Downloads can be paused and resumed. AURA verifies the model checksum before loading it.", 12f, greyText))
 
-        // NOTIFICATIONS
-        val notifications = pageColumn()
-        notifications.addView(label("Notifications", 24f, white))
-        notifications.addView(label("Important updates and activity from AURA.", 13f, muted))
-        val noticeCard = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(18, 18, 18, 18)
-            setBackgroundColor(deepPurple)
+        // NOTIFICATIONS — filter chips and readable activity cards.
+        val notifications = column(true)
+        notifications.addView(text("Notifications", 24f, darkText, true))
+        notifications.addView(text("Important updates and activity from AURA.", 13f, greyText))
+        notifications.addView(spacer(8))
+        val filters = row()
+        listOf("All", "Updates", "Activities", "System").forEachIndexed { index, name ->
+            filters.addView(TextView(this).apply {
+                text = name; gravity = android.view.Gravity.CENTER; textSize = 10f
+                setTextColor(if (index == 0) white else greyText)
+                background = rounded(if (index == 0) purple else 0xFFEAE6F1.toInt(), 13f)
+                setPadding(8, 11, 8, 11)
+            }, LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = 4 })
         }
-        noticeCard.addView(label("✦  YOU'RE ALL CAUGHT UP", 12f, lavender))
-        noticeCard.addView(label("No new notifications", 19f, white))
-        noticeCard.addView(label("Model download progress, setup messages and security status appear in their respective sections.", 13f, muted))
-        notifications.addView(noticeCard)
-        notifications.addView(section("ACTIVITY"))
-        notifications.addView(label("AURA keeps private conversations on this device. Location recovery remains off unless you explicitly enable it.", 13f, muted))
+        notifications.addView(filters)
+        fun notice(icon: String, title: String, detail: String, color: Int) {
+            val c = card(white)
+            val r = row()
+            r.addView(text(icon, 22f, color, true))
+            val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(12, 0, 0, 0) }
+            body.addView(text(title, 14f, darkText, true))
+            body.addView(text(detail, 11f, greyText))
+            r.addView(body, LinearLayout.LayoutParams(0, -2, 1f))
+            c.addView(r)
+            notifications.addView(c)
+            notifications.addView(spacer(7))
+        }
+        notice("⬡", "Welcome to AURA", "Your private assistant workspace is ready.", purple)
+        notice("✓", "Privacy controls", "Encrypted memory remains off until you enable it.", 0xFF159B62.toInt())
+        notice("⇧", "Model status", "Model download and setup activity appears here.", 0xFF3978E8.toInt())
 
-        // SETTINGS
-        val settings = pageColumn()
-        settings.addView(label("Settings", 24f, white))
-        settings.addView(label("Control how AURA works on this device.", 13f, muted))
-        settings.addView(section("PRESENCE"))
-        val presenceButton = actionButton("Add AURA to Quick Settings") {
+        // SETTINGS — profile and grouped preference cards.
+        val settings = column(true)
+        settings.addView(text("Settings", 24f, darkText, true))
+        val profile = card(white)
+        val profileRow = row()
+        val avatar = TextView(this).apply {
+            text = "E"; gravity = android.view.Gravity.CENTER; textSize = 19f
+            setTextColor(white); background = rounded(purple, 50f)
+        }
+        profileRow.addView(avatar, LinearLayout.LayoutParams((46 * resources.displayMetrics.density).toInt(), (46 * resources.displayMetrics.density).toInt()))
+        val profileText = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(12, 0, 0, 0) }
+        profileText.addView(text("Ephraim Hosea", 14f, darkText, true))
+        profileText.addView(text("AURA • Personal assistant", 11f, greyText))
+        profileRow.addView(profileText)
+        profile.addView(profileRow)
+        settings.addView(profile)
+        settings.addView(section("AI & MODELS", greyText))
+        settings.addView(button("⬡  Manage AI models  ›") { showPage("Downloads") })
+        settings.addView(section("VOICE & PRESENCE", greyText))
+        val presenceButton = button("Add AURA to Quick Settings") {
             AlertDialog.Builder(this@MainActivity)
                 .setTitle("Bring AURA within reach")
-                .setMessage("Swipe down twice, tap Edit (pencil), find Open AURA, then drag it into your active tiles. AURA never starts listening automatically.")
+                .setMessage("Swipe down twice, tap Edit (pencil), find Open AURA, then drag it into your active tiles.")
                 .setPositiveButton("Got it", null).show()
         }
         settings.addView(presenceButton)
         overlayButton.apply {
-            text = if (getSharedPreferences("aura_presence", MODE_PRIVATE).getBoolean("floating_enabled", false))
-                "Hide floating AURA bubble" else "Enable floating AURA bubble"
-            isAllCaps = false
-            textSize = 14f
-            setTextColor(white)
-            backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF302653.toInt())
+            text = if (getSharedPreferences("aura_presence", MODE_PRIVATE).getBoolean("floating_enabled", false)) "Floating Assistant: on" else "Floating Assistant: off"
+            isAllCaps = false; textSize = 13f; setTextColor(white); background = rounded(panel2, 16f)
             setOnClickListener { toggleFloatingAssistant() }
         }
         settings.addView(overlayButton)
-        wakeButton = actionButton(if (wakeListeningEnabled()) "Disable Hey AURA wake listening" else "Enable Hey AURA wake listening") { toggleWakeListening() }
+        wakeButton = button(if (wakeListeningEnabled()) "Hey AURA wake listening: on" else "Hey AURA wake listening: off") { toggleWakeListening() }
         settings.addView(wakeButton)
-        settings.addView(label("Optional hands-free wake phrase. Android shows a persistent microphone notification while listening.", 12f, muted))
-        settings.addView(section("DEVICE SECURITY"))
-        protectionButton = actionButton("Enable device lock") { requestDeviceAdmin() }
-        lockButton = actionButton("Lock device now") { confirmDeviceLock() }.apply { isEnabled = false }
-        settings.addView(protectionButton)
-        settings.addView(lockButton)
-        settings.addView(section("PRIVATE MEMORY"))
-        memoryButton = actionButton(if (memory.enabled) "Memory: on" else "Memory: off") { showMemorySettings() }
-        rememberButton = actionButton("Remember last chat") { rememberLastExchange() }.apply { isEnabled = false }
-        settings.addView(memoryButton)
-        settings.addView(rememberButton)
-        settings.addView(section("REMOTE RECOVERY"))
-        recoverySetupButton = actionButton("Link remote recovery") { showRecoverySetup() }
-        recoveryPollButton = actionButton("Check recovery now") { pollRecoveryNow() }.apply { isEnabled = false }
-        locationButton = actionButton("Location: off") { showLocationSettings() }
-        settings.addView(recoverySetupButton)
-        settings.addView(recoveryPollButton)
-        settings.addView(locationButton)
-        settings.addView(section("ABOUT AURA"))
-        settings.addView(label("AURA • Private on-device AI assistant", 13f, muted))
+        settings.addView(text("Wake listening is optional. Android displays a persistent microphone notification while the foreground listener is active.", 11f, greyText))
+        settings.addView(section("MEMORY & SECURITY", greyText))
+        memoryButton = button(if (memory.enabled) "Memory: on" else "Memory: off") { showMemorySettings() }
+        rememberButton = button("Remember last chat") { rememberLastExchange() }.apply { isEnabled = false }
+        protectionButton = button("Enable device lock") { requestDeviceAdmin() }
+        lockButton = button("Lock device now") { confirmDeviceLock() }.apply { isEnabled = false }
+        settings.addView(memoryButton); settings.addView(rememberButton)
+        settings.addView(protectionButton); settings.addView(lockButton)
+        settings.addView(section("REMOTE RECOVERY", greyText))
+        recoverySetupButton = button("Link remote recovery") { showRecoverySetup() }
+        recoveryPollButton = button("Check recovery now") { pollRecoveryNow() }.apply { isEnabled = false }
+        locationButton = button("Location: off") { showLocationSettings() }
+        settings.addView(recoverySetupButton); settings.addView(recoveryPollButton); settings.addView(locationButton)
+        settings.addView(section("ABOUT", greyText))
+        settings.addView(text("AURA • Private on-device AI assistant", 12f, greyText))
 
-        pageViews["Home"] = pageScroll(home)
-        pageViews["Chat"] = pageScroll(chat)
-        pageViews["Downloads"] = pageScroll(downloads)
-        pageViews["Notifications"] = pageScroll(notifications)
-        pageViews["Settings"] = pageScroll(settings)
+        pageViews["Home"] = scroll(home)
+        pageViews["Chat"] = scroll(chat)
+        pageViews["Downloads"] = scroll(downloads)
+        pageViews["Notifications"] = scroll(notifications)
+        pageViews["Settings"] = scroll(settings)
 
-        fun showSelectedPage(name: String) {
+        fun selectPage(name: String) {
             pageHost.removeAllViews()
-            pageHost.addView(pageViews[name], LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
-            ))
-            navButtons.forEach { (key, button) ->
-                button.backgroundTintList = android.content.res.ColorStateList.valueOf(
-                    if (key == name) purple else deepPurple
-                )
-                button.setTextColor(if (key == name) white else muted)
+            pageHost.addView(pageViews[name], FrameLayout.LayoutParams(-1, -1))
+            navButtons.forEach { (key, b) ->
+                b.background = rounded(if (key == name) purple else 0xFF160D2D.toInt(), 15f)
+                b.setTextColor(if (key == name) white else muted)
             }
         }
-        // The listener calls this local selector; showPage keeps Home shortcuts usable.
-        showPage = { name -> showSelectedPage(name) }
-
+        showPage = { name -> selectPage(name) }
         listOf("Home", "Chat", "Downloads", "Notifications", "Settings").forEach { name ->
-            val icon = when (name) {
-                "Home" -> "⌂"
-                "Chat" -> "✧"
-                "Downloads" -> "⇩"
-                "Notifications" -> "♧"
-                else -> "⚙"
+            val icon = when (name) { "Home" -> "⌂"; "Chat" -> "▢"; "Downloads" -> "♧"; "Notifications" -> "♧"; else -> "⚙" }
+            val b = Button(this).apply {
+                text = "$icon\n$name"; isAllCaps = false; textSize = 9f
+                setTextColor(muted); background = rounded(0xFF160D2D.toInt(), 15f)
+                stateListAnimator = null; setPadding(2, 8, 2, 8)
+                setOnClickListener { selectPage(name) }
             }
-            val button = Button(this).apply {
-                text = "$icon\n$name"
-                isAllCaps = false
-                textSize = 10f
-                setTextColor(muted)
-                backgroundTintList = android.content.res.ColorStateList.valueOf(deepPurple)
-                setPadding(0, 4, 0, 4)
-                setOnClickListener { showSelectedPage(name) }
-            }
-            navButtons[name] = button
-            navigation.addView(button, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            navButtons[name] = b
+            navigation.addView(b, LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = 3 })
         }
 
         root.addView(top)
-        root.addView(pageHost, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
-        ))
+        root.addView(pageHost, LinearLayout.LayoutParams(-1, 0, 1f))
         root.addView(navigation)
         root.setOnApplyWindowInsetsListener { view, insets ->
             val density = resources.displayMetrics.density
             val topInset = if (Build.VERSION.SDK_INT >= 30) insets.getInsets(android.view.WindowInsets.Type.statusBars()).top else insets.systemWindowInsetTop
             val bottomInset = if (Build.VERSION.SDK_INT >= 30) insets.getInsets(android.view.WindowInsets.Type.navigationBars()).bottom else insets.systemWindowInsetBottom
             view.setPadding(0, topInset + (8 * density).toInt(), 0, 0)
-            navigation.setPadding(navigation.paddingLeft, navigation.paddingTop, navigation.paddingRight, bottomInset + (8 * density).toInt())
+            navigation.setPadding(7, 7, 7, bottomInset + (8 * density).toInt())
             insets
         }
-        val shell = FrameLayout(this).apply {
-            setBackgroundColor(ink)
-            addView(root, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-        }
-        setContentView(shell)
-        showSelectedPage("Home")
-        showBrandedSplash(shell, ink, lavender, white, muted)
+        setContentView(root)
+        selectPage("Home")
+        showBrandedSplash(root, ink, lavender, white, muted)
         updateDeviceAdminControls()
         updateLocationButton()
     }
-
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
