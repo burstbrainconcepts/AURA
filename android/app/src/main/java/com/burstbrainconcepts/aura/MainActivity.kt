@@ -36,6 +36,7 @@ class MainActivity : Activity() {
     private lateinit var download: Button
     private lateinit var pauseDownload: Button
     private lateinit var downloadProgress: ProgressBar
+    private lateinit var overlayButton: Button
     private lateinit var protectionButton: Button
     private lateinit var lockButton: Button
     private lateinit var mic: Button
@@ -230,6 +231,7 @@ class MainActivity : Activity() {
         root.addView(heading)
         root.addView(status)
         root.addView(presenceButton)
+        root.addView(overlayButton)
         root.addView(download)
         root.addView(downloadProgress)
         root.addView(pauseDownload)
@@ -246,6 +248,38 @@ class MainActivity : Activity() {
     }
 
 
+
+    private fun toggleFloatingAssistant() {
+        val serviceIntent = Intent(this, AuraFloatingAssistantService::class.java)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+            AlertDialog.Builder(this)
+                .setTitle("Allow AURA to appear above other apps?")
+                .setMessage("Android requires your explicit permission for the floating AURA launcher. The bubble only opens AURA or dismisses itself; it does not listen, record, or read other apps.")
+                .setNegativeButton("Not now", null)
+                .setPositiveButton("Open permission settings") { _, _ ->
+                    val permissionIntent = Intent(
+                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        android.net.Uri.parse("package:$packageName")
+                    )
+                    startActivity(permissionIntent)
+                }
+                .show()
+            return
+        }
+        if (getSharedPreferences("aura_presence", MODE_PRIVATE).getBoolean("floating_enabled", false)) {
+            serviceIntent.action = AuraFloatingAssistantService.ACTION_HIDE
+            startService(serviceIntent)
+            getSharedPreferences("aura_presence", MODE_PRIVATE).edit().putBoolean("floating_enabled", false).apply()
+            overlayButton.text = "Enable floating AURA bubble"
+            status.text = "Floating AURA launcher dismissed."
+        } else {
+            serviceIntent.action = AuraFloatingAssistantService.ACTION_SHOW
+            startService(serviceIntent)
+            getSharedPreferences("aura_presence", MODE_PRIVATE).edit().putBoolean("floating_enabled", true).apply()
+            overlayButton.text = "Dismiss floating AURA bubble"
+            status.text = "Floating AURA launcher enabled. Tap AURA to open; × to dismiss."
+        }
+    }
 
     private fun showLocationSettings() {
         if (!recovery.isEnrolled()) {
