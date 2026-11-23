@@ -37,6 +37,8 @@ app.innerHTML = `
       <nav aria-label="Main navigation">
         <button class="nav active" data-view="assistant">◈ <span>Assistant</span></button>
         <button class="nav" data-view="memory">▤ <span>Memory</span></button>
+        <button class="nav" data-view="downloads">⇩ <span>Downloads</span></button>
+        <button class="nav" data-view="notifications">♧ <span>Notifications</span></button>
         <button class="nav" data-view="guard">⬡ <span>Device Guard</span></button>
         <button class="nav" data-view="settings">⚙ <span>Settings</span></button>
       </nav>
@@ -63,7 +65,7 @@ app.innerHTML = `
 const heading = document.querySelector("#heading");
 const panel = document.querySelector("#panel");
 const welcome = document.querySelector("#welcome");
-const labels = { assistant: "Your assistant", memory: "Private memory", guard: "Device Guard", settings: "Settings" };
+const labels = { assistant: "Your assistant", memory: "Private memory", downloads: "Downloads & updates", notifications: "Notifications", guard: "Device Guard", settings: "Settings" };
 
 function setStatus(online, detail = "") {
   document.querySelector("#engine-status").innerHTML = online ? "<i></i> Local engine connected" : "<i></i> Local engine offline";
@@ -556,6 +558,31 @@ async function runRecoveryAction(action, successMessage) {
 }
 
 function showPanel(view) {
+  if (view === "downloads") {
+    panel.innerHTML = `
+      <div class="panel-head"><div><h3>AI models & updates</h3><p class="muted">Manage the local model runtime used by AURA on this computer.</p></div><span class="tag">Local runtime</span></div>
+      <div class="download-card">
+        <div class="model-mark">✦</div>
+        <div><strong>Local llama.cpp engine</strong><p class="muted">AURA connects to a model server on this device. Model files are installed and updated through that local runtime, not downloaded by this desktop shell.</p></div>
+      </div>
+      <div class="settings-actions"><button type="button" id="open-model-settings">Configure model connection</button><button type="button" id="check-model-status" class="secondary">Check runtime</button></div>
+      <p class="hint" id="model-result">Current endpoint: ${endpoint}</p>`;
+    document.querySelector("#open-model-settings").addEventListener("click", () => {
+      document.querySelector('.nav[data-view="settings"]').click();
+    });
+    document.querySelector("#check-model-status").addEventListener("click", async () => {
+      document.querySelector("#model-result").textContent = await checkEngine() ? "Local model runtime is reachable." : "Runtime is offline. Start llama.cpp and verify the endpoint in Settings.";
+    });
+    return;
+  }
+  if (view === "notifications") {
+    panel.innerHTML = `
+      <div class="panel-head"><div><h3>Notifications</h3><p class="muted">Important setup and runtime activity.</p></div><span class="tag">Activity centre</span></div>
+      <div class="activity-card"><span class="activity-icon">✦</span><div><strong>AURA is ready</strong><p class="muted">Your private workspace is set up. Connect a local inference engine to start a conversation.</p></div></div>
+      <div class="activity-card"><span class="activity-icon">⬡</span><div><strong>Privacy status</strong><p class="muted">Prompts are sent to the localhost runtime configured in Settings. Memory stays locked until you unlock it.</p></div></div>
+      <div class="activity-card"><span class="activity-icon">⇩</span><div><strong>Model updates</strong><p class="muted">AURA desktop currently relies on your local llama.cpp installation for model downloads and updates.</p></div></div>`;
+    return;
+  }
   if (view === "assistant") {
     showAssistant();
     return;
@@ -629,4 +656,27 @@ document.querySelectorAll(".nav").forEach((button) => button.addEventListener("c
 }));
 showAssistant();
 checkEngine();
+
+if (!safeStorage.get("aura.onboarding.completed")) {
+  const overlay = document.createElement("div");
+  overlay.className = "onboarding-overlay";
+  overlay.innerHTML = `
+    <section class="onboarding-card" role="dialog" aria-modal="true" aria-labelledby="onboarding-title">
+      <div class="onboarding-mark"><img src="/aura-mark.svg" alt="AURA" /></div>
+      <p class="eyebrow">YOUR SPACE. YOUR CONTROL.</p>
+      <h2 id="onboarding-title">Welcome to AURA</h2>
+      <p class="muted">Your private AI companion for thinking, creating and getting things done. Connect a local model runtime to begin chatting.</p>
+      <button type="button" id="onboarding-continue">Set up AURA <span>→</span></button>
+      <button type="button" id="onboarding-later" class="onboarding-later">Explore first</button>
+    </section>`;
+  app.append(overlay);
+  const finishOnboarding = (openSettings) => {
+    safeStorage.set("aura.onboarding.completed", "true");
+    overlay.remove();
+    if (openSettings) document.querySelector('.nav[data-view="settings"]').click();
+  };
+  overlay.querySelector("#onboarding-continue").addEventListener("click", () => finishOnboarding(true));
+  overlay.querySelector("#onboarding-later").addEventListener("click", () => finishOnboarding(false));
+}
+window.addEventListener("beforeunload", () => { stopVoiceRecording(); if ("speechSynthesis" in window) window.speechSynthesis.cancel(); });
 window.addEventListener("beforeunload", () => { stopVoiceRecording(); if ("speechSynthesis" in window) window.speechSynthesis.cancel(); });
