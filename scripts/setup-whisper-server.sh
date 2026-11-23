@@ -20,11 +20,6 @@ if ! command -v c++ >/dev/null 2>&1 && ! command -v clang++ >/dev/null 2>&1; the
   exit 1
 fi
 
-if ! command -v ffmpeg >/dev/null 2>&1; then
-  echo "FFmpeg is required for browser-recorded WebM/OGG audio. Install FFmpeg and rerun this script." >&2
-  exit 1
-fi
-
 cd "$ROOT"
 git submodule update --init upstream/engines/whisper.cpp
 
@@ -60,4 +55,4 @@ fi
 
 echo "Starting local-only whisper.cpp server on 127.0.0.1:$PORT"
 echo "Model: $MODEL_PATH"
-exec "$SERVER" -m "$MODEL_PATH" --host 127.0.0.1 --port "$PORT"
+exec "$SERVER" -m "$MODEL_PATH" -l auto --host 127.0.0.1 --port "$PORT"
