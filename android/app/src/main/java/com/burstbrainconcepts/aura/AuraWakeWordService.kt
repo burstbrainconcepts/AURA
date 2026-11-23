@@ -39,6 +39,7 @@ class AuraWakeWordService : Service(), RecognitionListener {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
+            getSharedPreferences("aura_presence", MODE_PRIVATE).edit().putBoolean("wake_enabled", false).apply()
             stoppedByUser = true
             stopListening()
             stopForeground(STOP_FOREGROUND_REMOVE)
