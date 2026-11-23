@@ -52,11 +52,11 @@
 - **Core:** passing. The latest workflow completed dependency installation, recovery-server JavaScript syntax checks, the full `npm test` workspace suite and the recovery API Docker image build.
 - **Desktop:** Windows, macOS and Linux matrix builds all passed. GitHub uploaded separate desktop bundle artifacts.
 - **iOS:** the SwiftUI simulator app compiled, packaged and uploaded successfully. This is an unsigned Simulator artifact, not a physical-device IPA.
-- **Android:** the native APK workflow is running against the pinned llama.cpp revision; do not treat the APK as available until the workflow verifies and uploads it.
+- **Android:** the native debug APK build passed. The workflow fetched the pinned llama.cpp revision, compiled the JNI/runtime and Kotlin app, verified the APK output, printed its SHA-256 digest and uploaded the `aura-android-debug` artifact.
 
 The desktop app has a native Rust localhost inference bridge, passphrase-encrypted AES-256-GCM memory vault, optional local system voice output and authenticated Device Guard controls. The iOS app has local llama.cpp HTTP chat, offline-capability-checked speech input, local speech output, Keychain-backed AES-GCM opt-in memory and Guard controls. Android includes the in-process llama.cpp JNI runtime, verified starter-model download, offline voice, encrypted opt-in memory and signed recovery polling.
 
-**Not yet end-to-end verified:** physical-device installation and testing on each platform; iPhone-native enrollment and on-device model execution; desktop speech input; live recovery API deployment and multi-device recovery drills; cross-device memory sync; and production signing/distribution. These are distinct from the passing CI builds. Platform approvals and signing requirements must be checked against the actual release configuration at operationalization.
+**Not yet end-to-end verified:** physical-device installation and testing on each platform (the Android debug APK is CI-built but has not yet been tested on a physical phone); iPhone-native enrollment and on-device model execution; desktop speech input; live recovery API deployment and multi-device recovery drills; cross-device memory sync; and production signing/distribution. These are distinct from the passing CI builds. Platform approvals and signing requirements must be checked against the actual release configuration at operationalization.
 
 Run workspace tests from a local clone:
 
