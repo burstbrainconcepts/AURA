@@ -52,4 +52,4 @@ jobs:
           name: aura-desktop-${{ runner.os }}
           path: desktop/src-tauri/target/release/bundle/**
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 90
