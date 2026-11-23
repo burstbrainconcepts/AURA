@@ -23,6 +23,7 @@ let voiceSpeechDetected = false;
 let voiceLastSpeechAt = 0;
 let voiceStartedAt = 0;
 let voiceAutoStopPending = false;
+let voiceResumeAfterTranscription = false;
 let voiceAutoSubmit = safeStorage.get("aura.voice.auto-submit") !== "false";
 let history = [];
 let busy = false;
@@ -368,10 +369,17 @@ async function finishVoiceRecording(discard = false) {
     const spoken = String(transcript || "").trim();
     if (!spoken) throw new Error("No speech was recognised. Try again.");
     const command = spoken.toLowerCase().replace(/[.!?]+$/g, "").trim();
-    if (["end conversation", "close conversation", "go to sleep", "stop conversation", "goodbye aura"].includes(command)) {
+    if (["be quiet", "stop speaking", "silence"].includes(command)) {
+      if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+      setVoiceInputStatus("AURA voice output stopped.");
+    } else if (["continue listening", "listen again"].includes(command)) {
+      voiceResumeAfterTranscription = true;
+      setVoiceInputStatus("Preparing to listen again…");
+    } else if (["end conversation", "close conversation", "go to sleep", "stop conversation", "goodbye aura"].includes(command)) {
       history = [];
       const messages = document.querySelector("#messages");
       if (messages) messages.replaceChildren();
+      if ("speechSynthesis" in window) window.speechSynthesis.cancel();
       setVoiceInputStatus("Conversation ended. AURA is idle.");
     } else if (voiceAutoSubmit) {
       setVoiceInputStatus("Voice request recognised. Sending to the local model…");
@@ -390,6 +398,10 @@ async function finishVoiceRecording(discard = false) {
   } finally {
     voiceTranscribing = false;
     updateRecordButton();
+    if (voiceResumeAfterTranscription) {
+      voiceResumeAfterTranscription = false;
+      window.setTimeout(() => { void toggleVoiceRecording(); }, 250);
+    }
   }
 }
 async function toggleVoiceRecording() {
