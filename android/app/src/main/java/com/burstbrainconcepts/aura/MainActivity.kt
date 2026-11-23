@@ -415,6 +415,47 @@ class MainActivity : Activity() {
         pauseDownload = button("Ⅱ  Pause download") { pauseModelDownload() }.apply { visibility = ViewGroup.GONE }
         modelCard.addView(pauseDownload)
         downloads.addView(modelCard)
+
+        // Model family accordion: only expose actions for packages actually shipped.
+        downloads.addView(section("MODEL LIBRARY", greyText))
+        downloads.addView(text("Browse model families. AURA Lite is the currently supported offline package; other families are shown as catalogue groups until their packages are integrated.", 11f, greyText))
+        val modelFamilies = listOf("Gemma", "Danube", "Phi", "Qwen", "Llama")
+        modelFamilies.forEach { family ->
+            val familyCard = card(white)
+            val familyHeader = row()
+            val familyTitle = text(family, 14f, darkText, true)
+            familyHeader.addView(familyTitle, LinearLayout.LayoutParams(0, -2, 1f))
+            val chevron = text("⌄", 18f, greyText)
+            familyHeader.addView(chevron)
+            familyCard.addView(familyHeader)
+            val detail = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                visibility = View.GONE
+                setPadding(0, 12, 0, 0)
+            }
+            if (family == "Qwen") {
+                detail.addView(text("AURA Lite • Qwen 0.5B", 13f, darkText, true))
+                detail.addView(text("397 MB • CPU • On-device", 11f, greyText))
+                detail.addView(button(if (modelReady) "Loaded and ready ✓" else if (modelFile().exists()) "Load installed model" else "Download AURA Lite", true) {
+                    when {
+                        modelReady -> status.text = "AURA Lite is already running offline."
+                        modelFile().exists() -> loadExistingModel()
+                        downloadPaused -> continueModelDownload()
+                        else -> confirmModelDownload()
+                    }
+                })
+            } else {
+                detail.addView(text("No downloadable packages for this family are integrated in this build yet.", 11f, greyText))
+            }
+            familyCard.addView(detail)
+            familyCard.setOnClickListener {
+                val expanded = detail.visibility != View.VISIBLE
+                detail.visibility = if (expanded) View.VISIBLE else View.GONE
+                chevron.text = if (expanded) "⌃" else "⌄"
+            }
+            downloads.addView(familyCard)
+            downloads.addView(spacer(6))
+        }
         downloads.addView(section("STORAGE", greyText))
         val storage = card(white)
         storage.addView(text("Device storage", 14f, darkText, true))
