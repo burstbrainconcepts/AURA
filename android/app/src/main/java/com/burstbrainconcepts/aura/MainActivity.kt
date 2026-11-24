@@ -22,6 +22,9 @@ import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.FrameLayout
 import android.widget.ProgressBar
+import android.widget.ImageView
+import android.widget.ImageButton
+import android.view.Gravity
 import java.io.File
 import java.io.FileInputStream
 import java.io.RandomAccessFile
@@ -36,14 +39,14 @@ class MainActivity : Activity() {
     private lateinit var transcript: LinearLayout
     private lateinit var status: TextView
     private lateinit var input: EditText
-    private lateinit var send: Button
+    private lateinit var send: ImageButton
     private lateinit var download: Button
     private lateinit var pauseDownload: Button
     private lateinit var downloadProgress: ProgressBar
     private lateinit var overlayButton: Button
     private lateinit var protectionButton: Button
     private lateinit var lockButton: Button
-    private lateinit var mic: Button
+    private lateinit var mic: ImageButton
     private lateinit var speakToggle: Button
     private lateinit var voice: OfflineVoiceController
     private lateinit var memory: EncryptedMemoryStore
@@ -66,17 +69,23 @@ class MainActivity : Activity() {
     private var downloadPaused = false
     private var modelReady = false
     private var pendingLocationSettings = false
+    private var shellView: FrameLayout? = null
+    private var onboarding: OnboardingFlow? = null
+    private var refreshModelUi: () -> Unit = {}
+    private var wakePhrasesButton: Button? = null
 
     companion object {
         const val EXTRA_START_LISTENING = "com.burstbrainconcepts.aura.extra.START_LISTENING"
         const val EXTRA_VOICE_PROMPT = "com.burstbrainconcepts.aura.extra.VOICE_PROMPT"
         private const val REQUEST_WAKE_AUDIO = 7413
+        private const val REQUEST_ONBOARDING = 7414
         private const val REQUEST_DEVICE_ADMIN = 7411
         private const val REQUEST_LOCATION_PERMISSION = 7412
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        ModelCatalog.select(getSharedPreferences("aura_models", MODE_PRIVATE).getString("selected", null))
         memory = EncryptedMemoryStore(this)
         recovery = RemoteRecoveryClient(this)
         // Initialize this view before building the rest of the interface so no
@@ -123,7 +132,8 @@ class MainActivity : Activity() {
             } }
         )
         voice.initialize()
-        speakToggle.text = "Voice replies: on"
+        speakReplies = getSharedPreferences("aura_presence", MODE_PRIVATE).getBoolean("voice_replies", true)
+        speakToggle.text = if (speakReplies) "Voice replies: on" else "Voice replies: off"
         if (intent?.getBooleanExtra(EXTRA_START_LISTENING, false) == true) pendingHandsFreeListen = true
         pendingWakePrompt = intent?.getStringExtra(EXTRA_VOICE_PROMPT).orEmpty()
         try {
@@ -154,413 +164,639 @@ class MainActivity : Activity() {
     }
 
     private fun buildInterface() {
-        val ink = 0xFF10071F.toInt()
-        val panel = 0xFF1A1034.toInt()
-        val panel2 = 0xFF261746.toInt()
-        val purple = 0xFF702BFF.toInt()
+        val density = resources.displayMetrics.density
+        fun dp(v: Int): Int = (v * density).toInt()
+        val ink = 0xFF0A0614.toInt()
+        val deep = 0xFF241052.toInt()
+        val purple = 0xFF7B3CFF.toInt()
+        val purpleDark = 0xFF4A1FB8.toInt()
         val lavender = 0xFFC9A8FF.toInt()
-        val white = 0xFFFFFCFF.toInt()
-        val muted = 0xFFBDB1CE.toInt()
-        val paper = 0xFFF8F6FC.toInt()
-        val darkText = 0xFF20172E.toInt()
-        val greyText = 0xFF71687D.toInt()
+        val white = 0xFFFFFFFF.toInt()
+        val muted = 0xFFB4A8CC.toInt()
+        val glass = 0x16FFFFFF
+        val glassStroke = 0x2AFFFFFF
+        val green = 0xFF2BC48A.toInt()
+        val blue = 0xFF4C8DFF.toInt()
+        val amber = 0xFFF5A524.toInt()
+        val navBg = 0xF2130A2B.toInt()
 
-        fun rounded(color: Int, radius: Float = 22f, stroke: Int = 0): android.graphics.drawable.GradientDrawable =
+        fun rounded(color: Int, radius: Int, stroke: Int = 0): android.graphics.drawable.GradientDrawable =
             android.graphics.drawable.GradientDrawable().apply {
                 setColor(color)
-                cornerRadius = radius * resources.displayMetrics.density
-                if (stroke != 0) setStroke((1 * resources.displayMetrics.density).toInt().coerceAtLeast(1), stroke)
+                cornerRadius = dp(radius).toFloat()
+                if (stroke != 0) setStroke(dp(1).coerceAtLeast(1), stroke)
             }
+        fun gradient(c1: Int, c2: Int, radius: Int): android.graphics.drawable.GradientDrawable =
+            android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TL_BR, intArrayOf(c1, c2)
+            ).apply { cornerRadius = dp(radius).toFloat() }
+        fun icon(res: Int, tint: Int, size: Int = 22): android.graphics.drawable.Drawable =
+            resources.getDrawable(res, theme).mutate().apply { setBounds(0, 0, dp(size), dp(size)); setTint(tint) }
         fun text(value: String, size: Float = 14f, color: Int = white, bold: Boolean = false): TextView =
             TextView(this).apply {
                 text = value
                 textSize = size
                 setTextColor(color)
                 if (bold) setTypeface(typeface, android.graphics.Typeface.BOLD)
-                setPadding(0, 4, 0, 4)
-                setLineSpacing(1f, 1.03f)
+                setPadding(0, dp(2), 0, dp(2))
+                setLineSpacing(0f, 1.08f)
             }
-        fun button(value: String, primary: Boolean = false, action: () -> Unit): Button =
-            Button(this).apply {
-                text = value
-                isAllCaps = false
-                textSize = 13f
-                setTextColor(white)
-                background = rounded(if (primary) purple else panel2, 18f)
-                stateListAnimator = null
-                setPadding(14, 10, 14, 10)
-                setOnClickListener { action() }
+        fun badge(res: Int, bg: Int, tint: Int = white, size: Int = 44): ImageView =
+            ImageView(this).apply {
+                setImageResource(res)
+                setColorFilter(tint)
+                scaleType = ImageView.ScaleType.CENTER_INSIDE
+                setPadding(dp(11), dp(11), dp(11), dp(11))
+                background = rounded(bg, 15)
+                layoutParams = LinearLayout.LayoutParams(dp(size), dp(size))
             }
-        fun card(color: Int = panel): LinearLayout = LinearLayout(this).apply {
+        fun card(fill: Int = glass, stroke: Int = glassStroke): LinearLayout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(18, 16, 18, 16)
-            background = rounded(color, 22f)
+            setPadding(dp(16), dp(16), dp(16), dp(16))
+            background = rounded(fill, 22, stroke)
         }
-        fun section(value: String, color: Int = lavender): TextView =
-            text(value.uppercase(), 11f, color, true).apply {
-                letterSpacing = .13f
-                setPadding(2, 18, 2, 8)
+        fun spacer(h: Int = 12) = View(this).apply { layoutParams = LinearLayout.LayoutParams(1, dp(h)) }
+        fun section(value: String): TextView =
+            text(value.uppercase(), 11f, lavender, true).apply {
+                letterSpacing = .12f
+                setPadding(dp(4), dp(22), 0, dp(8))
             }
-        fun column(light: Boolean = false): LinearLayout = LinearLayout(this).apply {
+        fun rowOf(): LinearLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        fun column(): LinearLayout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(18, 12, 18, 26)
-            setBackgroundColor(if (light) paper else ink)
+            setPadding(dp(20), dp(8), dp(20), dp(28))
         }
         fun scroll(content: LinearLayout): ScrollView = ScrollView(this).apply {
             isFillViewport = true
             clipToPadding = false
-            setBackgroundColor(ink)
+            isVerticalScrollBarEnabled = false
             addView(content, ViewGroup.LayoutParams(-1, -2))
         }
-        fun row(): LinearLayout = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = android.view.Gravity.CENTER_VERTICAL
+        val fadedWhite = android.content.res.ColorStateList(
+            arrayOf(intArrayOf(-android.R.attr.state_enabled), intArrayOf()),
+            intArrayOf(0x66FFFFFF, white)
+        )
+        fun cta(value: String, primary: Boolean = true, action: () -> Unit): Button = Button(this).apply {
+            text = value
+            isAllCaps = false
+            textSize = 15f
+            setTextColor(fadedWhite)
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            stateListAnimator = null
+            minHeight = dp(52)
+            minimumHeight = dp(52)
+            background = if (primary) gradient(purple, purpleDark, 26) else rounded(glass, 26, glassStroke)
+            setOnClickListener { action() }
         }
-        fun spacer(height: Int = 10) = View(this).apply {
-            layoutParams = LinearLayout.LayoutParams(1, (height * resources.displayMetrics.density).toInt())
+        fun styleRowButton(b: Button, action: (() -> Unit)? = null): Button = b.apply {
+            isAllCaps = false
+            textSize = 15f
+            setTextColor(fadedWhite)
+            gravity = Gravity.START or Gravity.CENTER_VERTICAL
+            stateListAnimator = null
+            background = null
+            setPadding(0, dp(4), 0, dp(4))
+            minHeight = dp(56)
+            minimumHeight = dp(56)
+            if (action != null) setOnClickListener { action() }
+        }
+        fun rowButton(value: String, action: () -> Unit): Button =
+            styleRowButton(Button(this).apply { text = value }, action)
+        /** Wraps a text button in a glass row with a leading icon and trailing chevron. */
+        fun settingsRow(button: Button, iconRes: Int): LinearLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(14), 0, dp(12), 0)
+            background = rounded(glass, 18, glassStroke)
+            addView(badge(iconRes, 0x33FFFFFF, lavender, 38))
+            addView(button, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(12) })
+            addView(ImageView(this@MainActivity).apply {
+                setImageResource(R.drawable.ic_chevron); setColorFilter(muted)
+            }, LinearLayout.LayoutParams(dp(20), dp(20)))
+            setOnClickListener { if (button.isEnabled) button.performClick() }
+            layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8) }
+        }
+        fun tabBar(labels: List<String>, onSelect: (Int) -> Unit): LinearLayout {
+            val bar = rowOf()
+            val chips = mutableListOf<TextView>()
+            fun paint(selected: Int) = chips.forEachIndexed { i, chip ->
+                chip.setTextColor(if (i == selected) white else muted)
+                chip.background = if (i == selected) gradient(purple, purpleDark, 20) else rounded(glass, 20, glassStroke)
+            }
+            labels.forEachIndexed { i, label ->
+                val chip = TextView(this).apply {
+                    text = label
+                    gravity = Gravity.CENTER
+                    textSize = 12.5f
+                    setPadding(dp(8), dp(11), dp(8), dp(11))
+                    setOnClickListener { paint(i); onSelect(i) }
+                }
+                chips.add(chip)
+                bar.addView(chip, LinearLayout.LayoutParams(0, -2, 1f).apply { if (i < labels.size - 1) marginEnd = dp(8) })
+            }
+            paint(0)
+            return bar
         }
 
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(ink) }
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            val base = android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(deep, ink)
+            )
+            val glow = android.graphics.drawable.GradientDrawable().apply {
+                gradientType = android.graphics.drawable.GradientDrawable.RADIAL_GRADIENT
+                setGradientCenter(0.5f, 0f)
+                gradientRadius = resources.displayMetrics.widthPixels * 0.9f
+                colors = intArrayOf(0x668B4DFF, 0x00000000)
+            }
+            background = android.graphics.drawable.LayerDrawable(arrayOf(base, glow))
+        }
+
+        // HEADER — logo, wordmark, notifications shortcut and a quiet status line.
         val top = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(20, 8, 20, 12)
-            setBackgroundColor(ink)
+            setPadding(dp(20), dp(6), dp(20), dp(8))
         }
-        val brand = row()
-        brand.addView(text("◢", 25f, lavender, true))
-        brand.addView(text(" AURA", 22f, white, true))
-        val brandSpacer = View(this)
-        brand.addView(brandSpacer, LinearLayout.LayoutParams(0, 1, 1f))
-        brand.addView(text("✦", 19f, lavender))
+        val brand = rowOf()
+        brand.addView(ImageView(this).apply {
+            setImageResource(R.drawable.aura_launcher)
+            background = rounded(0xFF160D2C.toInt(), 11)
+            clipToOutline = true
+        }, LinearLayout.LayoutParams(dp(34), dp(34)))
+        brand.addView(text("AURA", 21f, white, true).apply { letterSpacing = .08f; setPadding(dp(10), 0, 0, 0) })
+        brand.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
+        brand.addView(ImageView(this).apply {
+            setImageResource(R.drawable.ic_bell)
+            setColorFilter(white)
+            setPadding(dp(10), dp(10), dp(10), dp(10))
+            background = rounded(glass, 20, glassStroke)
+            setOnClickListener { showPage("Notifications") }
+        }, LinearLayout.LayoutParams(dp(40), dp(40)))
         top.addView(brand)
-        status = text("Your private AI assistant", 11f, muted)
-        top.addView(status)
+        status = TextView(this).apply {
+            text = "Your private AI assistant"
+            textSize = 11.5f
+            setTextColor(muted)
+            maxLines = 2
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            setPadding(dp(12), dp(6), dp(12), dp(6))
+            background = rounded(glass, 14, glassStroke)
+        }
+        top.addView(spacer(8))
+        top.addView(status, LinearLayout.LayoutParams(-2, -2))
 
-        val pageHost = FrameLayout(this).apply { setBackgroundColor(ink) }
+        val pageHost = FrameLayout(this)
         val navigation = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            gravity = android.view.Gravity.CENTER
-            setPadding(7, 7, 7, 8)
-            background = rounded(0xFF160D2D.toInt(), 0f)
+            gravity = Gravity.CENTER
+            setPadding(dp(8), dp(8), dp(8), dp(8))
+            background = rounded(navBg, 0, glassStroke)
         }
         val pageViews = linkedMapOf<String, ScrollView>()
         val navButtons = linkedMapOf<String, Button>()
 
-        // HOME — branded dashboard with shortcuts and status cards.
+        // HOME
         val home = column()
-        home.addView(text("Good morning, Ephraim 👋", 23f, white, true))
-        home.addView(text("How can I help you today?", 14f, muted))
-        home.addView(spacer(12))
-        val quick = row()
-        listOf("▣\nChat", "♩\nVoice", "✎\nCreate", "⌘\nTools").forEach { item ->
-            val tile = TextView(this).apply {
-                text = item
-                gravity = android.view.Gravity.CENTER
-                textSize = 13f
-                setTextColor(white)
-                background = rounded(panel2, 17f)
-                setPadding(8, 14, 8, 14)
+        val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+        val greeting = when { hour < 12 -> "Good morning"; hour < 18 -> "Good afternoon"; else -> "Good evening" }
+        home.addView(text("$greeting,", 15f, muted))
+        home.addView(text("Ephraim 👋", 30f, white, true))
+        home.addView(text("What would you like to do today?", 14f, muted))
+        home.addView(spacer(16))
+        val tiles = rowOf()
+        listOf("Chat" to R.drawable.ic_chat, "Voice" to R.drawable.ic_mic, "Create" to R.drawable.ic_edit, "Tools" to R.drawable.ic_apps)
+            .forEachIndexed { i, (label, res) ->
+                val tile = LinearLayout(this).apply {
+                    orientation = LinearLayout.VERTICAL
+                    gravity = Gravity.CENTER
+                    setPadding(dp(6), dp(14), dp(6), dp(12))
+                    background = rounded(glass, 20, glassStroke)
+                    addView(badge(res, purple))
+                    addView(text(label, 12.5f, white).apply { gravity = Gravity.CENTER; setPadding(0, dp(8), 0, 0) })
+                    setOnClickListener {
+                        when (label) {
+                            "Voice" -> { showPage("Voice"); voice.startListening() }
+                            "Create", "Tools" -> showPage("Create")
+                            else -> showPage("Chat")
+                        }
+                    }
+                }
+                tiles.addView(tile, LinearLayout.LayoutParams(0, -2, 1f).apply { if (i < 3) marginEnd = dp(10) })
             }
-            quick.addView(tile, LinearLayout.LayoutParams(0, (76 * resources.displayMetrics.density).toInt(), 1f).apply {
-                marginEnd = (7 * resources.displayMetrics.density).toInt()
-            })
-            tile.setOnClickListener { when { item.contains("Voice") -> { showPage("Voice"); voice.startListening() }; item.contains("Create") || item.contains("Tools") -> showPage("Create"); else -> showPage("Chat") } }
+        home.addView(tiles)
+        home.addView(spacer(16))
+        val hero = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(20), dp(20), dp(20))
+            background = gradient(0xFF6B2FFF.toInt(), 0xFF2A0F70.toInt(), 26)
         }
-        home.addView(quick)
-        home.addView(spacer(14))
-        val hero = card(panel)
-        hero.addView(text("AURA PRO", 11f, lavender, true))
-        hero.addView(text("Your all-in-one AI assistant", 20f, white, true))
-        hero.addView(text("Work, study, creativity and automation — privately on your device.", 13f, muted))
-        hero.addView(spacer(8))
-        hero.addView(button("Chat with AURA  →", true) { showPage("Chat") })
+        hero.addView(text("AURA PRO", 11f, 0xFFE4D5FF.toInt(), true).apply { letterSpacing = .14f })
+        hero.addView(text("Your all-in-one AI assistant", 22f, white, true))
+        hero.addView(text("Work, study, create and automate — privately, on your device.", 13.5f, 0xFFE4D5FF.toInt()))
+        hero.addView(spacer(12))
+        hero.addView(cta("Chat with AURA  →") { showPage("Chat") }.apply { background = rounded(white, 26); setTextColor(purpleDark) })
         home.addView(hero)
-        home.addView(section("QUICK ACTIONS"))
-        val actions = row()
-        listOf("Summarize", "Write", "Translate", "Code").forEach { item ->
-            val t = TextView(this).apply {
-                text = "✧\n$item"
-                gravity = android.view.Gravity.CENTER
-                textSize = 11f
-                setTextColor(darkText)
-                background = rounded(paper, 15f)
-                setPadding(4, 14, 4, 14)
+        home.addView(section("Quick actions"))
+        val actions = rowOf()
+        listOf("Summarize" to R.drawable.ic_doc, "Write" to R.drawable.ic_edit, "Translate" to R.drawable.ic_translate, "Code" to R.drawable.ic_code)
+            .forEachIndexed { i, (label, res) ->
+                val t = LinearLayout(this).apply {
+                    orientation = LinearLayout.VERTICAL
+                    gravity = Gravity.CENTER
+                    setPadding(dp(4), dp(14), dp(4), dp(12))
+                    background = rounded(glass, 18, glassStroke)
+                    addView(ImageView(this@MainActivity).apply { setImageResource(res); setColorFilter(lavender) },
+                        LinearLayout.LayoutParams(dp(24), dp(24)))
+                    addView(text(label, 11.5f, white).apply { gravity = Gravity.CENTER; setPadding(0, dp(8), 0, 0) })
+                    setOnClickListener { showPage("Chat"); input.setText("$label: "); input.requestFocus() }
+                }
+                actions.addView(t, LinearLayout.LayoutParams(0, -2, 1f).apply { if (i < 3) marginEnd = dp(8) })
             }
-            actions.addView(t, LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = 6 })
-            t.setOnClickListener { showPage("Create"); input.setText("$item: ") ; input.requestFocus() }
-        }
         home.addView(actions)
-        home.addView(section("YOUR DEVICE"))
-        val deviceCard = card(panel2)
-        deviceModelSummary = text("Offline model: checking status…", 13f, white)
-        deviceCard.addView(deviceModelSummary)
-        deviceCard.addView(text("Memory stays private and off until you enable it. Location sharing is off by default.", 12f, muted))
+        home.addView(section("Your device"))
+        val deviceCard = card()
+        val deviceRow = rowOf()
+        deviceRow.addView(badge(R.drawable.ic_shield, 0x332BC48A, green))
+        val deviceText = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(14), 0, 0, 0) }
+        deviceModelSummary = text("Offline model: checking status…", 14f, white, true)
+        deviceText.addView(deviceModelSummary)
+        deviceText.addView(text("Memory is private and off until you enable it. Location sharing is off by default.", 12f, muted))
+        deviceRow.addView(deviceText, LinearLayout.LayoutParams(0, -2, 1f))
+        deviceCard.addView(deviceRow)
         home.addView(deviceCard)
 
-        // CHAT — persistent conversation area and compact composer.
+        // CHAT
         val chat = column()
-        chat.addView(text("Chat with AURA", 23f, white, true))
-        chat.addView(text("Your private conversation, stored on this device.", 12f, muted))
+        chat.addView(text("Chat with AURA", 26f, white, true))
+        chat.addView(text("Private. Stored on this device.", 13f, muted))
         transcript = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(8, 12, 8, 18)
+            setPadding(0, dp(12), 0, dp(12))
             addView(TextView(this@MainActivity).apply {
                 text = "Welcome to AURA. Download the starter model to begin chatting offline."
                 textSize = 14f
                 setTextColor(muted)
-                setPadding(16, 18, 16, 18)
-                background = rounded(panel, 18f)
+                setPadding(dp(16), dp(14), dp(16), dp(14))
+                background = rounded(glass, 20, glassStroke)
             })
         }
         val transcriptScroll = ScrollView(this).apply {
             isFillViewport = true
             clipToPadding = false
+            isVerticalScrollBarEnabled = false
             addView(transcript, ViewGroup.LayoutParams(-1, -2))
         }
         chat.addView(transcriptScroll, LinearLayout.LayoutParams(-1, 0, 1f))
+        speakToggle = Button(this).apply {
+            text = "Voice replies: on"
+            isAllCaps = false
+            textSize = 12f
+            setTextColor(fadedWhite)
+            stateListAnimator = null
+            minHeight = dp(34)
+            minimumHeight = dp(34)
+            setPadding(dp(14), 0, dp(14), 0)
+            background = rounded(glass, 17, glassStroke)
+            isEnabled = false
+            setOnClickListener {
+                speakReplies = !speakReplies
+                getSharedPreferences("aura_presence", MODE_PRIVATE).edit().putBoolean("voice_replies", speakReplies).apply()
+                speakToggle.text = if (speakReplies) "Voice replies: on" else "Voice replies: off"
+                if (!speakReplies) voice.stopSpeaking()
+            }
+        }
+        chat.addView(speakToggle, LinearLayout.LayoutParams(-2, -2).apply { bottomMargin = dp(8) })
+        val composer = rowOf().apply {
+            setPadding(dp(16), dp(4), dp(6), dp(4))
+            background = rounded(0x22FFFFFF, 28, glassStroke)
+        }
         input = EditText(this).apply {
             hint = "Message AURA…"
             setTextColor(white)
             setHintTextColor(muted)
-            textSize = 14f
+            textSize = 15f
             maxLines = 4
             isEnabled = false
-            setPadding(16, 13, 16, 13)
-            background = rounded(panel2, 24f)
+            background = null
+            setPadding(0, dp(12), dp(8), dp(12))
         }
-        chat.addView(input)
-        chat.addView(spacer(8))
-        val controls = row()
-        mic = button("🎙  Voice", false) { voice.startListening() }.apply { isEnabled = false }
-        speakToggle = button("Voice replies: on") {
-            speakReplies = !speakReplies
-            speakToggle.text = if (speakReplies) "Voice replies: on" else "Voice replies: off"
-            if (!speakReplies) voice.stopSpeaking()
-        }.apply { isEnabled = false }
-        controls.addView(mic, LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = 7 })
-        controls.addView(speakToggle, LinearLayout.LayoutParams(0, -2, 1f))
-        chat.addView(controls)
-        send = button("Send message  ➤", true) { sendMessage() }.apply { isEnabled = false }
-        chat.addView(send)
+        composer.addView(input, LinearLayout.LayoutParams(0, -2, 1f))
+        val iconTint = android.content.res.ColorStateList(
+            arrayOf(intArrayOf(-android.R.attr.state_enabled), intArrayOf()),
+            intArrayOf(0x55FFFFFF, lavender)
+        )
+        mic = ImageButton(this).apply {
+            setImageResource(R.drawable.ic_mic)
+            imageTintList = iconTint
+            background = null
+            isEnabled = false
+            setOnClickListener { voice.startListening() }
+        }
+        composer.addView(mic, LinearLayout.LayoutParams(dp(44), dp(44)))
+        send = ImageButton(this).apply {
+            setImageResource(R.drawable.ic_send)
+            imageTintList = android.content.res.ColorStateList.valueOf(white)
+            val on = android.graphics.drawable.GradientDrawable().apply { shape = android.graphics.drawable.GradientDrawable.OVAL; setColor(purple) }
+            val off = android.graphics.drawable.GradientDrawable().apply { shape = android.graphics.drawable.GradientDrawable.OVAL; setColor(0x33FFFFFF) }
+            background = android.graphics.drawable.StateListDrawable().apply {
+                addState(intArrayOf(-android.R.attr.state_enabled), off)
+                addState(intArrayOf(), on)
+            }
+            isEnabled = false
+            setOnClickListener { sendMessage() }
+        }
+        composer.addView(send, LinearLayout.LayoutParams(dp(44), dp(44)))
+        chat.addView(composer, LinearLayout.LayoutParams(-1, -2))
 
-        // VOICE — dedicated hands-free assistant screen.
+        // VOICE
         val voicePage = column()
-        voicePage.addView(text("AURA Voice", 24f, white, true))
-        voicePage.addView(text("Talk naturally. AURA listens on this device.", 13f, muted))
-        voicePage.addView(spacer(24))
-        val orb = TextView(this).apply {
-            text = "◉"
-            gravity = android.view.Gravity.CENTER
-            textSize = 82f
-            setTextColor(lavender)
-            background = rounded(panel2, 160f, purple)
-            elevation = 12f
+        voicePage.gravity = Gravity.CENTER_HORIZONTAL
+        voicePage.addView(text("AURA Voice", 26f, white, true))
+        voicePage.addView(text("Talk naturally. AURA listens on this device.", 13.5f, muted))
+        voicePage.addView(spacer(30))
+        val orb = View(this).apply {
+            background = android.graphics.drawable.GradientDrawable().apply {
+                shape = android.graphics.drawable.GradientDrawable.OVAL
+                gradientType = android.graphics.drawable.GradientDrawable.RADIAL_GRADIENT
+                gradientRadius = dp(120).toFloat()
+                colors = intArrayOf(0xFFE2D0FF.toInt(), 0xFF8B4DFF.toInt(), 0xFF3A1A8C.toInt())
+            }
+            elevation = dp(10).toFloat()
         }
-        voicePage.addView(orb, LinearLayout.LayoutParams(-1, (210 * resources.displayMetrics.density).toInt()).apply {
-            leftMargin = (44 * resources.displayMetrics.density).toInt()
-            rightMargin = (44 * resources.displayMetrics.density).toInt()
-        })
-        voicePage.addView(spacer(18))
-        voicePage.addView(text("Ready when you are", 18f, white, true).apply { gravity = android.view.Gravity.CENTER })
-        voicePage.addView(text("Tap the microphone to speak. Enable Hey AURA in Settings for optional wake listening.", 12f, muted).apply { gravity = android.view.Gravity.CENTER })
-        voicePage.addView(spacer(18))
-        voicePage.addView(button("🎙  Start listening", true) { voice.startListening() })
-        voicePage.addView(button("Stop voice output") { voice.stopSpeaking() })
+        voicePage.addView(orb, LinearLayout.LayoutParams(dp(220), dp(220)))
+        android.animation.ObjectAnimator.ofPropertyValuesHolder(
+            orb,
+            android.animation.PropertyValuesHolder.ofFloat("scaleX", 1f, 1.07f),
+            android.animation.PropertyValuesHolder.ofFloat("scaleY", 1f, 1.07f)
+        ).apply {
+            duration = 1700
+            repeatMode = android.animation.ValueAnimator.REVERSE
+            repeatCount = android.animation.ValueAnimator.INFINITE
+            start()
+        }
+        voicePage.addView(spacer(26))
+        voicePage.addView(text("Ready when you are", 20f, white, true).apply { gravity = Gravity.CENTER })
+        voicePage.addView(text("Tap the microphone to speak. Turn on Hey AURA in Settings for optional wake listening.", 13f, muted).apply { gravity = Gravity.CENTER })
+        voicePage.addView(spacer(22))
+        voicePage.addView(cta("Start listening") { voice.startListening() }, LinearLayout.LayoutParams(-1, -2))
+        voicePage.addView(spacer(8))
+        voicePage.addView(cta("Stop voice output", false) { voice.stopSpeaking() }, LinearLayout.LayoutParams(-1, -2))
 
-        // CREATE & TOOLS — accessible shortcuts for writing, coding and translation.
+        // CREATE & TOOLS
         val toolsPage = column()
-        toolsPage.addView(text("Create with AURA", 24f, white, true))
-        toolsPage.addView(text("Choose a workspace to start creating.", 13f, muted))
+        toolsPage.addView(text("Create with AURA", 26f, white, true))
+        toolsPage.addView(text("Pick a workspace and AURA gets it ready.", 13.5f, muted))
         toolsPage.addView(spacer(14))
-        listOf("Write and edit", "Summarize documents", "Translate text", "Code assistant", "Brainstorm ideas", "Plan a project").forEach { action ->
-            val item = card(panel2)
-            item.addView(text(action, 15f, white, true))
-            item.addView(text("Open a private AURA chat with this task ready.", 11f, muted))
-            item.setOnClickListener {
-                showPage("Chat")
-                input.setText("$action: ")
-                input.requestFocus()
+        listOf(
+            Triple("Write and edit", R.drawable.ic_edit, "Drafts, emails and rewrites"),
+            Triple("Summarize documents", R.drawable.ic_doc, "Short, clear summaries"),
+            Triple("Translate text", R.drawable.ic_translate, "Between languages, on device"),
+            Triple("Code assistant", R.drawable.ic_code, "Write, explain and fix code"),
+            Triple("Brainstorm ideas", R.drawable.ic_sparkle, "Names, angles and options"),
+            Triple("Plan a project", R.drawable.ic_layers, "Steps, timelines and checklists")
+        ).forEach { (action, res, detail) ->
+            val item = rowOf().apply {
+                setPadding(dp(14), dp(12), dp(14), dp(12))
+                background = rounded(glass, 20, glassStroke)
+                addView(badge(res, purple))
+                val body = LinearLayout(this@MainActivity).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(14), 0, 0, 0) }
+                body.addView(text(action, 15f, white, true))
+                body.addView(text(detail, 12f, muted))
+                addView(body, LinearLayout.LayoutParams(0, -2, 1f))
+                addView(ImageView(this@MainActivity).apply { setImageResource(R.drawable.ic_chevron); setColorFilter(muted) },
+                    LinearLayout.LayoutParams(dp(20), dp(20)))
+                setOnClickListener { showPage("Chat"); input.setText("$action: "); input.requestFocus() }
             }
-            toolsPage.addView(item)
-            toolsPage.addView(spacer(7))
+            toolsPage.addView(item, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
         }
 
-        // DOWNLOADS — light product cards like the reference design.
-        val downloads = column(true)
-        downloads.addView(text("Downloads", 24f, darkText, true))
-        downloads.addView(text("Manage your AI models and updates.", 13f, greyText))
-        downloads.addView(spacer(10))
-        val tabs = row()
-        listOf("AI Models", "Updates", "Assets").forEachIndexed { index, name ->
-            val t = TextView(this).apply {
-                text = name
-                gravity = android.view.Gravity.CENTER
-                textSize = 11f
-                setTextColor(if (index == 0) white else greyText)
-                background = rounded(if (index == 0) purple else 0xFFEAE6F1.toInt(), 12f)
-                setPadding(8, 12, 8, 12)
-            }
-            tabs.addView(t, LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = 5 })
-        }
-        downloads.addView(tabs)
-        downloads.addView(spacer(10))
-        val modelCard = card(white)
-        val modelHead = row()
-        modelHead.addView(text("⬡", 28f, purple, true))
-        val modelInfo = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(12, 0, 0, 0) }
-        modelInfo.addView(text("AURA Lite", 16f, darkText, true))
-        modelInfo.addView(text("397 MB  •  v1.0.0", 11f, greyText))
+        // DOWNLOADS
+        val downloads = column()
+        downloads.addView(text("Downloads", 26f, white, true))
+        downloads.addView(text("Manage your AI models and updates.", 13.5f, muted))
+        downloads.addView(spacer(12))
+        val modelsTab = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val updatesTab = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
+        val assetsTab = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
+        val downloadTabs = listOf(modelsTab, updatesTab, assetsTab)
+        downloads.addView(tabBar(listOf("AI Models", "Updates", "Assets")) { index ->
+            downloadTabs.forEachIndexed { i, tab -> tab.visibility = if (i == index) View.VISIBLE else View.GONE }
+        })
+        downloads.addView(spacer(12))
+        downloads.addView(modelsTab)
+        downloads.addView(updatesTab)
+        downloads.addView(assetsTab)
+
+        val modelCard = card()
+        val modelHead = rowOf()
+        modelHead.addView(badge(R.drawable.ic_model, purple))
+        val modelInfo = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(14), 0, 0, 0) }
+        val modelNameView = text(ModelCatalog.current.name, 17f, white, true)
+        val modelMetaView = text("", 12f, muted)
+        modelInfo.addView(modelNameView)
+        modelInfo.addView(modelMetaView)
         modelHead.addView(modelInfo, LinearLayout.LayoutParams(0, -2, 1f))
-        modelHead.addView(text(if (modelReady) "RUNNING" else "STARTER", 10f, if (modelReady) 0xFF159B62.toInt() else purple, true))
+        val modelStateView = text("", 10.5f, lavender, true)
+        modelHead.addView(modelStateView)
         modelCard.addView(modelHead)
-        modelCard.addView(text("Fast, efficient and works offline after setup.", 12f, greyText))
-        download = button("Download model", true) {
+        modelCard.addView(spacer(12))
+        download = cta("Download model") {
             if (downloadPaused) continueModelDownload() else confirmModelDownload()
         }
         modelCard.addView(download)
         downloadProgress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
             max = 1000; progress = 0; visibility = ViewGroup.GONE
+            progressTintList = android.content.res.ColorStateList.valueOf(purple)
+            progressBackgroundTintList = android.content.res.ColorStateList.valueOf(0x33FFFFFF)
         }
-        modelCard.addView(downloadProgress)
-        pauseDownload = button("Ⅱ  Pause download") { pauseModelDownload() }.apply { visibility = ViewGroup.GONE }
-        modelCard.addView(pauseDownload)
-        downloads.addView(modelCard)
+        modelCard.addView(downloadProgress, LinearLayout.LayoutParams(-1, dp(14)).apply { topMargin = dp(10) })
+        pauseDownload = cta("Pause download", false) { pauseModelDownload() }.apply { visibility = ViewGroup.GONE }
+        modelCard.addView(pauseDownload, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        modelsTab.addView(modelCard)
 
-        // Model family accordion: only expose actions for packages actually shipped.
-        downloads.addView(section("MODEL LIBRARY", greyText))
-        downloads.addView(text("Browse model families. AURA Lite is the currently supported offline package; other families are shown as catalogue groups until their packages are integrated.", 11f, greyText))
-        val modelFamilies = listOf("Gemma", "Danube", "Phi", "Qwen", "Llama")
-        modelFamilies.forEach { family ->
-            val familyCard = card(white)
-            val familyHeader = row()
-            val familyTitle = text(family, 14f, darkText, true)
-            familyHeader.addView(familyTitle, LinearLayout.LayoutParams(0, -2, 1f))
-            val chevron = text("⌄", 18f, greyText)
-            familyHeader.addView(chevron)
+        modelsTab.addView(section("Choose your model"))
+        val tierList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        modelsTab.addView(tierList)
+        val memoryInfo = android.app.ActivityManager.MemoryInfo()
+        (getSystemService(ACTIVITY_SERVICE) as android.app.ActivityManager).getMemoryInfo(memoryInfo)
+        val ramGb = (memoryInfo.totalMem / 1_000_000_000L).toInt()
+        refreshModelUi = {
+            val current = ModelCatalog.current
+            modelNameView.text = current.name
+            modelMetaView.text = "${current.sizeLabel}  •  works offline  •  checksum-verified"
+            modelStateView.text = if (modelReady) "ACTIVE" else "SELECTED"
+            modelStateView.setTextColor(if (modelReady) green else lavender)
+            tierList.removeAllViews()
+            ModelCatalog.ALL.forEach { spec ->
+                val isCurrent = spec.id == current.id
+                val onDisk = File(filesDir, spec.fileName).exists()
+                val fits = ramGb + 1 >= spec.minRamGb
+                val tier = card()
+                val head = rowOf()
+                head.addView(badge(R.drawable.ic_model, if (isCurrent) purple else 0x33FFFFFF))
+                val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(14), 0, 0, 0) }
+                body.addView(text(spec.name + if (spec.id == "base") "  ·  Recommended" else "", 15.5f, white, true))
+                body.addView(text("${spec.sizeLabel}  •  ${spec.tagline}", 12f, muted))
+                head.addView(body, LinearLayout.LayoutParams(0, -2, 1f))
+                tier.addView(head)
+                tier.addView(spacer(10))
+                val label = when {
+                    isCurrent && modelReady -> "Active ✓"
+                    !fits -> "Needs ${spec.minRamGb} GB+ RAM"
+                    onDisk -> "Use this model"
+                    else -> "Download  ${spec.sizeLabel}"
+                }
+                val actionButton = cta(label, !(isCurrent && modelReady)) { selectModel(spec) }
+                actionButton.isEnabled = fits && !(isCurrent && modelReady)
+                tier.addView(actionButton)
+                tierList.addView(tier, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
+            }
+        }
+        refreshModelUi()
+
+        modelsTab.addView(section("Model library"))
+        listOf("Gemma", "Danube", "Phi", "Qwen", "Llama").forEach { family ->
+            val familyCard = card()
+            val familyHeader = rowOf()
+            familyHeader.addView(text(family, 15f, white, true), LinearLayout.LayoutParams(0, -2, 1f))
+            val chevron = ImageView(this).apply { setImageResource(R.drawable.ic_chevron); setColorFilter(muted); rotation = 90f }
+            familyHeader.addView(chevron, LinearLayout.LayoutParams(dp(20), dp(20)))
             familyCard.addView(familyHeader)
             val detail = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 visibility = View.GONE
-                setPadding(0, 12, 0, 0)
+                setPadding(0, dp(12), 0, 0)
             }
             if (family == "Qwen") {
-                detail.addView(text("AURA Lite • Qwen 0.5B", 13f, darkText, true))
-                detail.addView(text("397 MB • CPU • On-device", 11f, greyText))
-                detail.addView(button(if (modelReady) "Loaded and ready ✓" else if (modelFile().exists()) "Load installed model" else "Download AURA Lite", true) {
-                    when {
-                        modelReady -> status.text = "AURA Lite is already running offline."
-                        modelFile().exists() -> loadExistingModel()
-                        downloadPaused -> continueModelDownload()
-                        else -> confirmModelDownload()
-                    }
-                })
+                detail.addView(text("AURA Lite, Base and Pro are Qwen 2.5 models.", 14f, white, true))
+                detail.addView(text("Pick one under “Choose your model” above. Each is verified before use and runs fully on this device.", 12f, muted))
             } else {
-                detail.addView(text("No downloadable packages for this family are integrated in this build yet.", 11f, greyText))
+                detail.addView(text("No downloadable packages for this family are integrated in this build yet.", 12f, muted))
             }
             familyCard.addView(detail)
             familyCard.setOnClickListener {
                 val expanded = detail.visibility != View.VISIBLE
                 detail.visibility = if (expanded) View.VISIBLE else View.GONE
-                chevron.text = if (expanded) "⌃" else "⌄"
+                chevron.rotation = if (expanded) 270f else 90f
             }
-            downloads.addView(familyCard)
-            downloads.addView(spacer(6))
+            modelsTab.addView(familyCard, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8) })
         }
-        downloads.addView(section("STORAGE", greyText))
-        val storage = card(white)
-        storage.addView(text("Device storage", 14f, darkText, true))
-        storage.addView(text("Model storage is managed on this device. Download size: approximately 397 MB.", 12f, greyText))
-        downloads.addView(storage)
-        downloads.addView(section("DOWNLOAD BEHAVIOUR", greyText))
-        downloads.addView(text("Downloads can be paused and resumed. AURA verifies the model checksum before loading it.", 12f, greyText))
+        modelsTab.addView(section("Storage"))
+        val storage = card()
+        storage.addView(text("Device storage", 15f, white, true))
+        storage.addView(text("Downloads can be paused and resumed. AURA verifies the model checksum before loading it. Download size: about 397 MB.", 12.5f, muted))
+        modelsTab.addView(storage)
 
-        // NOTIFICATIONS — filter chips and readable activity cards.
-        val notifications = column(true)
-        notifications.addView(text("Notifications", 24f, darkText, true))
-        notifications.addView(text("Important updates and activity from AURA.", 13f, greyText))
-        notifications.addView(spacer(8))
-        val filters = row()
-        listOf("All", "Updates", "Activities", "System").forEachIndexed { index, name ->
-            filters.addView(TextView(this).apply {
-                text = name; gravity = android.view.Gravity.CENTER; textSize = 10f
-                setTextColor(if (index == 0) white else greyText)
-                background = rounded(if (index == 0) purple else 0xFFEAE6F1.toInt(), 13f)
-                setPadding(8, 11, 8, 11)
-            }, LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = 4 })
-        }
-        notifications.addView(filters)
-        fun notice(icon: String, title: String, detail: String, color: Int) {
-            val c = card(white)
-            val r = row()
-            r.addView(text(icon, 22f, color, true))
-            val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(12, 0, 0, 0) }
-            body.addView(text(title, 14f, darkText, true))
-            body.addView(text(detail, 11f, greyText))
-            r.addView(body, LinearLayout.LayoutParams(0, -2, 1f))
-            c.addView(r)
-            notifications.addView(c)
-            notifications.addView(spacer(7))
-        }
-        notice("⬡", "Welcome to AURA", "Your private assistant workspace is ready.", purple)
-        notice("✓", "Privacy controls", "Encrypted memory remains off until you enable it.", 0xFF159B62.toInt())
-        notice("⇧", "Model status", "Model download and setup activity appears here.", 0xFF3978E8.toInt())
+        val updateCard = card()
+        updateCard.addView(text("AURA v1.0", 16f, white, true))
+        updateCard.addView(text("App updates arrive as a newer AURA installer. In-app updates are not available in this build.", 13f, muted))
+        updatesTab.addView(updateCard)
+        val assetsCard = card()
+        assetsCard.addView(text("No extra assets", 16f, white, true))
+        assetsCard.addView(text("Voices, maps and offline knowledge packs will appear here when they are added.", 13f, muted))
+        assetsTab.addView(assetsCard)
 
-        // SETTINGS — profile and grouped preference cards.
-        val settings = column(true)
-        settings.addView(text("Settings", 24f, darkText, true))
-        val profile = card(white)
-        val profileRow = row()
-        val avatar = TextView(this).apply {
-            text = "E"; gravity = android.view.Gravity.CENTER; textSize = 19f
-            setTextColor(white); background = rounded(purple, 50f)
+        // NOTIFICATIONS
+        val notifications = column()
+        notifications.addView(text("Notifications", 26f, white, true))
+        notifications.addView(text("Updates and activity from AURA.", 13.5f, muted))
+        notifications.addView(spacer(12))
+        data class Notice(val category: String, val iconRes: Int, val color: Int, val title: String, val detail: String)
+        val notices = listOf(
+            Notice("Updates", R.drawable.ic_sparkle, purple, "Welcome to AURA", "Your private assistant workspace is ready."),
+            Notice("System", R.drawable.ic_shield, green, "Privacy controls", "Encrypted memory stays off until you enable it."),
+            Notice("Activities", R.drawable.ic_download, blue, "Model status", "Model download and setup activity appears here.")
+        )
+        val noticeList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        fun showNotices(category: String) {
+            noticeList.removeAllViews()
+            val shown = notices.filter { category == "All" || it.category == category }
+            if (shown.isEmpty()) {
+                noticeList.addView(card().apply { addView(text("Nothing here yet.", 14f, muted)) })
+            }
+            shown.forEach { n ->
+                val rowCard = rowOf().apply {
+                    setPadding(dp(14), dp(14), dp(14), dp(14))
+                    background = rounded(glass, 20, glassStroke)
+                    addView(badge(n.iconRes, n.color))
+                    val body = LinearLayout(this@MainActivity).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(14), 0, 0, 0) }
+                    body.addView(text(n.title, 15f, white, true))
+                    body.addView(text(n.detail, 12.5f, muted))
+                    addView(body, LinearLayout.LayoutParams(0, -2, 1f))
+                }
+                noticeList.addView(rowCard, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
+            }
         }
-        profileRow.addView(avatar, LinearLayout.LayoutParams((46 * resources.displayMetrics.density).toInt(), (46 * resources.displayMetrics.density).toInt()))
-        val profileText = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(12, 0, 0, 0) }
-        profileText.addView(text("Ephraim Hosea", 14f, darkText, true))
-        profileText.addView(text("AURA • Personal assistant", 11f, greyText))
-        profileRow.addView(profileText)
-        profile.addView(profileRow)
-        profile.setOnClickListener {
-            AlertDialog.Builder(this@MainActivity)
-                .setTitle("AURA profile")
-                .setMessage("Ephraim Hosea\\nPersonal assistant\\n\\nYour conversations and optional encrypted memory stay on this device unless you explicitly configure a remote service.")
-                .setPositiveButton("Close", null)
-                .show()
+        val noticeFilters = listOf("All", "Updates", "Activities", "System")
+        notifications.addView(tabBar(noticeFilters) { showNotices(noticeFilters[it]) })
+        notifications.addView(spacer(12))
+        notifications.addView(noticeList)
+        showNotices("All")
+
+        // SETTINGS
+        val settings = column()
+        settings.addView(text("Settings", 26f, white, true))
+        settings.addView(spacer(8))
+        val profile = rowOf().apply {
+            setPadding(dp(16), dp(16), dp(16), dp(16))
+            background = gradient(0x44FFFFFF, 0x1A7B3CFF, 24)
+            addView(TextView(this@MainActivity).apply {
+                text = "E"; gravity = Gravity.CENTER; textSize = 20f
+                setTextColor(white); setTypeface(typeface, android.graphics.Typeface.BOLD)
+                background = gradient(purple, purpleDark, 30)
+            }, LinearLayout.LayoutParams(dp(54), dp(54)))
+            val who = LinearLayout(this@MainActivity).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(14), 0, 0, 0) }
+            who.addView(text("Ephraim Hosea", 17f, white, true))
+            who.addView(text("AURA • Personal assistant", 12.5f, muted))
+            addView(who, LinearLayout.LayoutParams(0, -2, 1f))
+            setOnClickListener {
+                AlertDialog.Builder(this@MainActivity)
+                    .setTitle("AURA profile")
+                    .setMessage("Ephraim Hosea\nPersonal assistant\n\nYour conversations and optional encrypted memory stay on this device unless you explicitly configure a remote service.")
+                    .setPositiveButton("Close", null)
+                    .show()
+            }
         }
-        settings.addView(profile)
-        settings.addView(section("AI & MODELS", greyText))
-        settings.addView(button("⬡  Manage AI models  ›") { showPage("Downloads") })
-        settings.addView(section("VOICE & PRESENCE", greyText))
-        val presenceButton = button("Add AURA to Quick Settings") {
+        settings.addView(profile, LinearLayout.LayoutParams(-1, -2))
+        settings.addView(section("AI & Models"))
+        settings.addView(settingsRow(rowButton("Manage AI models") { showPage("Downloads") }, R.drawable.ic_model))
+        settings.addView(section("Voice & presence"))
+        settings.addView(settingsRow(rowButton("Add AURA to Quick Settings") {
             AlertDialog.Builder(this@MainActivity)
                 .setTitle("Bring AURA within reach")
                 .setMessage("Swipe down twice, tap Edit (pencil), find Open AURA, then drag it into your active tiles.")
                 .setPositiveButton("Got it", null).show()
-        }
-        settings.addView(presenceButton)
-        overlayButton.apply {
+        }, R.drawable.ic_apps))
+        styleRowButton(overlayButton) { toggleFloatingAssistant() }.apply {
             text = if (getSharedPreferences("aura_presence", MODE_PRIVATE).getBoolean("floating_enabled", false)) "Floating Assistant: on" else "Floating Assistant: off"
-            isAllCaps = false; textSize = 13f; setTextColor(white); background = rounded(panel2, 16f)
-            setOnClickListener { toggleFloatingAssistant() }
         }
-        settings.addView(overlayButton)
-        wakeButton = button(if (wakeListeningEnabled()) "Hey AURA wake listening: on" else "Hey AURA wake listening: off") { toggleWakeListening() }
-        settings.addView(wakeButton)
-        settings.addView(text("Wake listening is optional. Android displays a persistent microphone notification while the foreground listener is active.", 11f, greyText))
-        settings.addView(section("MEMORY & SECURITY", greyText))
-        memoryButton = button(if (memory.enabled) "Memory: on" else "Memory: off") { showMemorySettings() }
-        rememberButton = button("Remember last chat") { rememberLastExchange() }.apply { isEnabled = false }
-        protectionButton = button("Enable device lock") { requestDeviceAdmin() }
-        lockButton = button("Lock device now") { confirmDeviceLock() }.apply { isEnabled = false }
-        settings.addView(memoryButton); settings.addView(rememberButton)
-        settings.addView(protectionButton); settings.addView(lockButton)
-        settings.addView(section("REMOTE RECOVERY", greyText))
-        recoverySetupButton = button("Link remote recovery") { showRecoverySetup() }
-        recoveryPollButton = button("Check recovery now") { pollRecoveryNow() }.apply { isEnabled = false }
-        locationButton = button("Location: off") { showLocationSettings() }
-        settings.addView(recoverySetupButton); settings.addView(recoveryPollButton); settings.addView(locationButton)
-        settings.addView(section("ABOUT", greyText))
-        settings.addView(text("AURA • Private on-device AI assistant", 12f, greyText))
+        settings.addView(settingsRow(overlayButton, R.drawable.ic_layers))
+        wakeButton = rowButton(if (wakeListeningEnabled()) "Hey AURA wake listening: on" else "Hey AURA wake listening: off") { toggleWakeListening() }
+        settings.addView(settingsRow(wakeButton, R.drawable.ic_wave))
+        wakePhrasesButton = rowButton("Names AURA answers to: " + WakePhrases.display(this)) { showWakePhrasesDialog() }
+        settings.addView(settingsRow(wakePhrasesButton!!, R.drawable.ic_edit))
+        settings.addView(text("Wake listening is optional. Android shows a persistent microphone notification while it is active.", 12f, muted).apply { setPadding(dp(4), dp(2), dp(4), 0) })
+        settings.addView(section("Memory & security"))
+        memoryButton = rowButton(if (memory.enabled) "Memory: on" else "Memory: off") { showMemorySettings() }
+        rememberButton = rowButton("Remember last chat") { rememberLastExchange() }.apply { isEnabled = false }
+        protectionButton = rowButton("Enable device lock") { requestDeviceAdmin() }
+        lockButton = rowButton("Lock device now") { confirmDeviceLock() }.apply { isEnabled = false }
+        settings.addView(settingsRow(memoryButton, R.drawable.ic_star))
+        settings.addView(settingsRow(rememberButton, R.drawable.ic_doc))
+        settings.addView(settingsRow(protectionButton, R.drawable.ic_lock))
+        settings.addView(settingsRow(lockButton, R.drawable.ic_lock))
+        settings.addView(section("Remote recovery"))
+        recoverySetupButton = rowButton("Link remote recovery") { showRecoverySetup() }
+        recoveryPollButton = rowButton("Check recovery now") { pollRecoveryNow() }.apply { isEnabled = false }
+        locationButton = rowButton("Location: off") { showLocationSettings() }
+        settings.addView(settingsRow(recoverySetupButton, R.drawable.ic_shield))
+        settings.addView(settingsRow(recoveryPollButton, R.drawable.ic_shield))
+        settings.addView(settingsRow(locationButton, R.drawable.ic_pin))
+        settings.addView(section("About"))
+        settings.addView(text("AURA • Private on-device AI assistant", 12.5f, muted).apply { setPadding(dp(4), 0, 0, 0) })
 
         pageViews["Home"] = scroll(home)
         pageViews["Chat"] = scroll(chat)
@@ -574,21 +810,32 @@ class MainActivity : Activity() {
             pageHost.removeAllViews()
             pageHost.addView(pageViews[name], FrameLayout.LayoutParams(-1, -1))
             navButtons.forEach { (key, b) ->
-                b.background = rounded(if (key == name) purple else 0xFF160D2D.toInt(), 15f)
-                b.setTextColor(if (key == name) white else muted)
+                val tint = if (key == name) white else muted
+                b.background = if (key == name) gradient(purple, purpleDark, 18) else null
+                b.setTextColor(tint)
+                b.compoundDrawables[1]?.setTint(tint)
             }
         }
         showPage = { name -> selectPage(name) }
         listOf("Home", "Chat", "Downloads", "Notifications", "Settings").forEach { name ->
-            val icon = when (name) { "Home" -> "⌂"; "Chat" -> "▢"; "Downloads" -> "⇩"; "Notifications" -> "♧"; else -> "⚙" }
+            val iconRes = when (name) {
+                "Home" -> R.drawable.ic_home
+                "Chat" -> R.drawable.ic_chat
+                "Downloads" -> R.drawable.ic_download
+                "Notifications" -> R.drawable.ic_bell
+                else -> R.drawable.ic_settings
+            }
+            val label = if (name == "Notifications") "Notifs" else name
             val b = Button(this).apply {
-                text = "$icon\n$name"; isAllCaps = false; textSize = 9f
-                setTextColor(muted); background = rounded(0xFF160D2D.toInt(), 15f)
-                stateListAnimator = null; setPadding(2, 8, 2, 8)
+                text = label; isAllCaps = false; textSize = 10.5f
+                setTextColor(muted); background = null
+                stateListAnimator = null; setPadding(dp(2), dp(9), dp(2), dp(7))
+                setCompoundDrawables(null, icon(iconRes, muted, 22), null, null)
+                compoundDrawablePadding = dp(3)
                 setOnClickListener { selectPage(name) }
             }
             navButtons[name] = b
-            navigation.addView(b, LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = 3 })
+            navigation.addView(b, LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = dp(3) })
         }
 
         root.addView(top)
@@ -599,10 +846,11 @@ class MainActivity : Activity() {
             val topInset = if (Build.VERSION.SDK_INT >= 30) insets.getInsets(android.view.WindowInsets.Type.statusBars()).top else insets.systemWindowInsetTop
             val bottomInset = if (Build.VERSION.SDK_INT >= 30) insets.getInsets(android.view.WindowInsets.Type.navigationBars()).bottom else insets.systemWindowInsetBottom
             view.setPadding(0, topInset + (16 * density).toInt(), 0, 0)
-            navigation.setPadding(7, 7, 7, bottomInset + (8 * density).toInt())
+            navigation.setPadding((8 * density).toInt(), (8 * density).toInt(), (8 * density).toInt(), bottomInset + (8 * density).toInt())
             insets
         }
         val shell = FrameLayout(this).apply {
+            shellView = this
             setBackgroundColor(ink)
             addView(root, FrameLayout.LayoutParams(-1, -1))
         }
@@ -679,6 +927,41 @@ class MainActivity : Activity() {
         sendMessage()
     }
 
+    /** Lets the user type the names AURA responds to, e.g. "Hey Aura, Aura, Jarvis". */
+    private fun showWakePhrasesDialog() {
+        val field = EditText(this).apply {
+            setText(WakePhrases.display(this@MainActivity))
+            setSelection(text.length)
+            hint = "Hey Aura, Aura"
+            setSingleLine(true)
+            setPadding(48, 32, 48, 16)
+        }
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("Names AURA answers to")
+            .setMessage("Separate names with commas, up to ${WakePhrases.MAX_PHRASES}. A name must start what you say, as in “Hey Aura, what's next?”. Short or common words can wake AURA by accident, so pick something distinctive.")
+            .setView(field)
+            .setNegativeButton("Cancel", null)
+            .setNeutralButton("Reset") { _, _ ->
+                WakePhrases.reset(this)
+                wakePhrasesButton?.text = "Names AURA answers to: " + WakePhrases.display(this)
+            }
+            .setPositiveButton("Save", null)
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val problem = WakePhrases.save(this, field.text.toString())
+                if (problem != null) {
+                    field.error = problem
+                } else {
+                    wakePhrasesButton?.text = "Names AURA answers to: " + WakePhrases.display(this)
+                    status.text = "AURA will answer to: " + WakePhrases.display(this)
+                    dialog.dismiss()
+                }
+            }
+        }
+        dialog.show()
+    }
+
     private fun resumeWakeListening() {
         if (wakeListeningEnabled()) window.decorView.postDelayed({ startWakeService() }, 900)
     }
@@ -688,7 +971,7 @@ class MainActivity : Activity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
             AlertDialog.Builder(this)
                 .setTitle("Allow AURA to appear above other apps?")
-                .setMessage("Android requires your explicit permission for the floating AURA launcher. The bubble only opens AURA or dismisses itself; it does not listen, record, or read other apps.")
+                .setMessage("Android requires your explicit permission for the floating AURA launcher. Tap the bubble to talk to AURA from any app. It listens only after you tap it and Android shows a notification while the microphone is on. It does not read other apps. Press and hold the bubble to hide it.")
                 .setNegativeButton("Not now", null)
                 .setPositiveButton("Open permission settings") { _, _ ->
                     val permissionIntent = Intent(
@@ -705,13 +988,13 @@ class MainActivity : Activity() {
             startService(serviceIntent)
             getSharedPreferences("aura_presence", MODE_PRIVATE).edit().putBoolean("floating_enabled", false).apply()
             overlayButton.text = "Enable floating AURA bubble"
-            status.text = "Floating AURA launcher dismissed."
+            status.text = "AURA bubble hidden."
         } else {
             serviceIntent.action = AuraFloatingAssistantService.ACTION_SHOW
             startService(serviceIntent)
             getSharedPreferences("aura_presence", MODE_PRIVATE).edit().putBoolean("floating_enabled", true).apply()
             overlayButton.text = "Dismiss floating AURA bubble"
-            status.text = "Floating AURA launcher enabled. Tap AURA to open; × to dismiss."
+            status.text = "AURA bubble is on. Tap it to talk; press and hold to hide."
         }
     }
 
@@ -1081,24 +1364,28 @@ class MainActivity : Activity() {
             confirmModelDownload()
             return
         }
-        AlertDialog.Builder(this)
-            .setTitle("✦  Welcome to AURA")
-            .setMessage("Your private AI companion is ready. Chat, create and think with an assistant designed around your device and your privacy.\n\nDownload the starter AI model once to enable offline conversations. You can explore first and download later.")
-            .setCancelable(false)
-            .setNegativeButton("Explore first") { _, _ ->
-                preferences.edit().putBoolean("welcome_seen", true).apply()
-            }
-            .setPositiveButton("Get started") { _, _ ->
-                preferences.edit().putBoolean("welcome_seen", true).apply()
-                confirmModelDownload()
-            }
-            .show()
+        val shell = shellView ?: return
+        preferences.edit().putBoolean("welcome_seen", true).apply()
+        onboarding = OnboardingFlow(
+            this,
+            shell,
+            { microphone, notifications ->
+                val wanted = mutableListOf<String>()
+                if (microphone) wanted.add(android.Manifest.permission.RECORD_AUDIO)
+                if (notifications && Build.VERSION.SDK_INT >= 33) wanted.add(android.Manifest.permission.POST_NOTIFICATIONS)
+                val missing = wanted.filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
+                if (missing.isNotEmpty()) requestPermissions(missing.toTypedArray(), REQUEST_ONBOARDING)
+            },
+            { startModelDownload() },
+            { if (downloadInProgress) pauseModelDownload() else continueModelDownload() },
+            { page -> onboarding = null; showPage(page) }
+        ).also { it.start() }
     }
 
     private fun confirmModelDownload() {
         AlertDialog.Builder(this)
-            .setTitle("Download your AURA AI model?")
-            .setMessage("AURA Lite • approximately 397 MB\n\nInstall the on-device AI model to unlock private offline conversations. The download can be paused and resumed safely, and its checksum is verified before use.")
+            .setTitle("Download ${ModelCatalog.current.name}?")
+            .setMessage("${ModelCatalog.current.name} • ${ModelCatalog.current.sizeLabel}\n\nInstall the on-device AI model to unlock private offline conversations. The download can be paused and resumed safely, and its checksum is verified before use. Use Wi-Fi for large models.")
             .setNegativeButton("Not now", null)
             .setPositiveButton("Download") { _, _ -> startModelDownload() }
             .show()
@@ -1178,6 +1465,7 @@ class MainActivity : Activity() {
                                 runOnUiThread {
                                     downloadProgress.progress = percent
                                     status.text = "Downloading AI model • ${downloaded / 1_000_000} MB / ${total / 1_000_000} MB • ${percent / 10}%"
+                                    onboarding?.updateProgress(percent, "Downloading… ${downloaded / 1_000_000} MB / ${total / 1_000_000} MB (${percent / 10}%)")
                                 }
                             }
                             output.fd.sync()
@@ -1207,6 +1495,7 @@ class MainActivity : Activity() {
                     download.text = "Continue download"
                     pauseDownload.visibility = ViewGroup.GONE
                     status.text = "Download paused • ${partial.length() / 1_000_000} MB saved • tap Continue when ready"
+                    onboarding?.setPaused(true)
                 }
                 return
             }
@@ -1226,6 +1515,7 @@ class MainActivity : Activity() {
                     runOnUiThread {
                         downloadProgress.progress = percent
                         status.text = "Verifying model integrity • ${percent / 10}%"
+                        onboarding?.updateProgress(percent, "Verifying model integrity… ${percent / 10}%")
                     }
                 }
             }
@@ -1238,6 +1528,7 @@ class MainActivity : Activity() {
                 partial.copyTo(modelFile(), overwrite = true)
                 partial.delete()
             }
+            markVerified(modelFile())
             runOnUiThread {
                 downloadProgress.isIndeterminate = true
                 status.text = "Model verified • loading local AI engine…"
@@ -1252,9 +1543,10 @@ class MainActivity : Activity() {
                 downloadProgress.progress = 1000
                 downloadProgress.visibility = ViewGroup.GONE
                 pauseDownload.visibility = ViewGroup.GONE
-                status.text = "OFFLINE AI READY • Qwen 0.5B • CPU mode"
+                status.text = "OFFLINE AI READY • ${ModelCatalog.current.name} • CPU mode"
                 startHandsFreeListening()
                 download.text = "Model installed ✓"
+                refreshModelUi()
                 download.isEnabled = false
                 input.isEnabled = true
                 send.isEnabled = true
@@ -1262,6 +1554,7 @@ class MainActivity : Activity() {
                 speakToggle.isEnabled = true
                 submitWakePrompt()
                 append("AURA", "I'm ready. Your messages are processed locally on this device. Tap the microphone for on-device speech input or enable voice replies if an offline voice is installed.")
+                onboarding?.showComplete()
             }
         } catch (error: Exception) {
             downloadInProgress = false
@@ -1271,7 +1564,37 @@ class MainActivity : Activity() {
                 downloadPaused = partial.exists() && partial.length() > 0
                 pauseDownload.visibility = ViewGroup.GONE
                 status.text = "Model setup paused safely: ${error.message ?: "network or setup error"}"
+                onboarding?.updateProgress(downloadProgress.progress, "Paused: ${error.message ?: "network or setup error"}")
+                onboarding?.setPaused(true)
             }
+        }
+    }
+
+    private fun verifiedKey(file: File) = "verified_" + file.name
+    private fun isVerified(file: File): Boolean =
+        file.exists() && getSharedPreferences("aura_models", MODE_PRIVATE).getLong(verifiedKey(file), -1L) == file.length()
+    private fun markVerified(file: File) {
+        getSharedPreferences("aura_models", MODE_PRIVATE).edit().putLong(verifiedKey(file), file.length()).apply()
+    }
+
+    /** Switches the active model; loads it if installed, otherwise offers its download. */
+    private fun selectModel(spec: ModelSpec) {
+        if (downloadInProgress) {
+            status.text = "Wait for the current download to finish or pause it first."
+            return
+        }
+        ModelCatalog.select(spec.id)
+        getSharedPreferences("aura_models", MODE_PRIVATE).edit().putString("selected", spec.id).apply()
+        modelReady = false
+        downloadPaused = partialModelFile().exists() && partialModelFile().length() > 0
+        download.isEnabled = true
+        download.text = if (downloadPaused) "Continue download" else "Download model"
+        refreshModelUi()
+        if (modelFile().exists()) {
+            loadExistingModel()
+        } else {
+            status.text = "${spec.name} selected • download it to use it offline"
+            confirmModelDownload()
         }
     }
 
@@ -1282,19 +1605,23 @@ class MainActivity : Activity() {
         executor.execute {
             try {
                 val file = modelFile()
-                val digest = MessageDigest.getInstance("SHA-256")
-                FileInputStream(file).use { stream ->
-                    val buffer = ByteArray(1024 * 1024)
-                    while (true) {
-                        val count = stream.read(buffer)
-                        if (count < 0) break
-                        digest.update(buffer, 0, count)
+                if (!isVerified(file)) {
+                    // First load of this file: verify it once, then remember so later launches start instantly.
+                    val digest = MessageDigest.getInstance("SHA-256")
+                    FileInputStream(file).use { stream ->
+                        val buffer = ByteArray(1024 * 1024)
+                        while (true) {
+                            val count = stream.read(buffer)
+                            if (count < 0) break
+                            digest.update(buffer, 0, count)
+                        }
                     }
-                }
-                val actual = digest.digest().joinToString("") { "%02x".format(it) }
-                if (!actual.equals(ModelCatalog.SHA256, ignoreCase = true)) {
-                    file.delete()
-                    throw IllegalStateException("Installed model failed integrity verification. Download it again.")
+                    val actual = digest.digest().joinToString("") { "%02x".format(it) }
+                    if (!actual.equals(ModelCatalog.SHA256, ignoreCase = true)) {
+                        file.delete()
+                        throw IllegalStateException("Installed model failed integrity verification. Download it again.")
+                    }
+                    markVerified(file)
                 }
                 runOnUiThread {
                     downloadProgress.isIndeterminate = true
@@ -1306,7 +1633,8 @@ class MainActivity : Activity() {
                     downloadProgress.isIndeterminate = false
                     downloadProgress.visibility = ViewGroup.GONE
                     download.text = "Model installed ✓"
-                    status.text = "OFFLINE AI READY • Qwen 0.5B • CPU mode"
+                    refreshModelUi()
+                    status.text = "OFFLINE AI READY • ${ModelCatalog.current.name} • CPU mode"
                     startHandsFreeListening()
                     input.isEnabled = true
                     send.isEnabled = true
@@ -1326,13 +1654,13 @@ class MainActivity : Activity() {
     }
 
     private fun loadNativeModel(path: String): Boolean = try {
-        NativeLlama.nativeLoadModel(path)
+        AssistantEngine.loadModel(path)
     } catch (error: UnsatisfiedLinkError) {
         throw IllegalStateException("AURA native inference library is not packaged in this APK.", error)
     }
 
     private fun generateNative(systemPrompt: String, prompt: String, maxTokens: Int): String = try {
-        NativeLlama.nativeGenerate(systemPrompt, prompt, maxTokens)
+        AssistantEngine.generate(systemPrompt, prompt, maxTokens)
     } catch (error: UnsatisfiedLinkError) {
         throw IllegalStateException("AURA native inference library is not available in this APK.", error)
     }
@@ -1428,7 +1756,10 @@ class MainActivity : Activity() {
     override fun onDestroy() {
         voice.shutdown()
         executor.shutdownNow()
-        try { NativeLlama.nativeUnloadModel() } catch (_: UnsatisfiedLinkError) { }
+        // Keep the model loaded while the floating voice bubble is enabled so it can still answer.
+        if (!getSharedPreferences("aura_presence", MODE_PRIVATE).getBoolean("floating_enabled", false)) {
+            AssistantEngine.unload()
+        }
         super.onDestroy()
     }
 }

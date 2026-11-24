@@ -9,7 +9,9 @@ import android.os.Bundle
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
+import android.content.Context
 import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
 import android.speech.tts.Voice
 import java.util.Locale
 
@@ -18,22 +20,28 @@ import java.util.Locale
  * It never falls back to a cloud speech recognizer.
  */
 class OfflineVoiceController(
-    private val activity: Activity,
+    private val context: Context,
     private val onTranscript: (String) -> Unit,
     private val onStatus: (String) -> Unit,
-    private val onSilenceTimeout: () -> Unit
+    private val onSilenceTimeout: () -> Unit,
+    /** Called (on a background thread) when a spoken reply has finished or failed. */
+    private val onSpeechDone: () -> Unit = {},
+    /** Called when the user starts talking. */
+    private val onSpeechStart: () -> Unit = {},
+    /** Called when a listening round ends without a usable result (silence, noise, error). */
+    private val onListenEnded: () -> Unit = {}
 ) : TextToSpeech.OnInitListener, RecognitionListener {
     private var recognizer: SpeechRecognizer? = null
     private var tts: TextToSpeech? = null
     private var offlineTtsReady = false
 
     fun initialize() {
-        tts = TextToSpeech(activity.applicationContext, this)
+        tts = TextToSpeech(context.applicationContext, this)
     }
 
     fun isOnDeviceRecognitionAvailable(): Boolean {
         return Build.VERSION.SDK_INT >= 31 &&
-            SpeechRecognizer.isOnDeviceRecognitionAvailable(activity)
+            SpeechRecognizer.isOnDeviceRecognitionAvailable(context)
     }
 
     fun startListening() {
@@ -41,13 +49,15 @@ class OfflineVoiceController(
             onStatus("On-device speech recognition is unavailable on this Android device.")
             return
         }
-        if (activity.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            activity.requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), REQUEST_AUDIO)
+        if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            val host = context as? Activity
+            if (host != null) host.requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), REQUEST_AUDIO)
+            else onStatus("Microphone permission is needed. Open AURA to allow it.")
             return
         }
         try {
             if (recognizer == null) {
-                recognizer = SpeechRecognizer.createOnDeviceSpeechRecognizer(activity).also {
+                recognizer = SpeechRecognizer.createOnDeviceSpeechRecognizer(context).also {
                     it.setRecognitionListener(this)
                 }
             }
@@ -75,7 +85,13 @@ class OfflineVoiceController(
         tts?.speak(text.take(4000), TextToSpeech.QUEUE_FLUSH, null, "aura-reply")
     }
 
+    fun canSpeak(): Boolean = offlineTtsReady
+
     fun stopSpeaking() { tts?.stop() }
+
+    fun cancelListening() {
+        try { recognizer?.cancel() } catch (_: Exception) { }
+    }
 
     override fun onInit(status: Int) {
         if (status != TextToSpeech.SUCCESS) {
@@ -99,12 +115,18 @@ class OfflineVoiceController(
             return
         }
         engine.voice = localVoice
+        engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+            override fun onStart(utteranceId: String?) {}
+            override fun onDone(utteranceId: String?) { if (utteranceId == "aura-reply") onSpeechDone() }
+            @Deprecated("Deprecated in Java")
+            override fun onError(utteranceId: String?) { if (utteranceId == "aura-reply") onSpeechDone() }
+        })
         offlineTtsReady = true
         onStatus("Offline speech output ready.")
     }
 
     override fun onReadyForSpeech(params: Bundle?) { onStatus("Listening...") }
-    override fun onBeginningOfSpeech() {}
+    override fun onBeginningOfSpeech() { onSpeechStart() }
     override fun onRmsChanged(rmsdB: Float) {}
     override fun onBufferReceived(buffer: ByteArray?) {}
     override fun onEndOfSpeech() { onStatus("Processing speech on device...") }
@@ -116,6 +138,7 @@ class OfflineVoiceController(
             else -> "Offline speech recognition error ($error)."
         }
         onStatus(message)
+        if (error != SpeechRecognizer.ERROR_SPEECH_TIMEOUT) onListenEnded()
     }
     override fun onResults(results: Bundle?) {
         val text = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()
