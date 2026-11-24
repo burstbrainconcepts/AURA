@@ -71,6 +71,7 @@ class MainActivity : Activity() {
     private var pendingLocationSettings = false
     private var shellView: FrameLayout? = null
     private var onboarding: OnboardingFlow? = null
+    private var refreshModelUi: () -> Unit = {}
 
     companion object {
         const val EXTRA_START_LISTENING = "com.burstbrainconcepts.aura.extra.START_LISTENING"
@@ -83,6 +84,7 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        ModelCatalog.select(getSharedPreferences("aura_models", MODE_PRIVATE).getString("selected", null))
         memory = EncryptedMemoryStore(this)
         recovery = RemoteRecoveryClient(this)
         // Initialize this view before building the rest of the interface so no
@@ -589,10 +591,13 @@ class MainActivity : Activity() {
         val modelHead = rowOf()
         modelHead.addView(badge(R.drawable.ic_model, purple))
         val modelInfo = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(14), 0, 0, 0) }
-        modelInfo.addView(text("AURA Lite", 17f, white, true))
-        modelInfo.addView(text("397 MB  •  v1.0.0  •  Works offline", 12f, muted))
+        val modelNameView = text(ModelCatalog.current.name, 17f, white, true)
+        val modelMetaView = text("", 12f, muted)
+        modelInfo.addView(modelNameView)
+        modelInfo.addView(modelMetaView)
         modelHead.addView(modelInfo, LinearLayout.LayoutParams(0, -2, 1f))
-        modelHead.addView(text(if (modelReady) "RUNNING" else "STARTER", 10.5f, if (modelReady) green else lavender, true))
+        val modelStateView = text("", 10.5f, lavender, true)
+        modelHead.addView(modelStateView)
         modelCard.addView(modelHead)
         modelCard.addView(spacer(12))
         download = cta("Download model") {
@@ -609,21 +614,45 @@ class MainActivity : Activity() {
         modelCard.addView(pauseDownload, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
         modelsTab.addView(modelCard)
 
-        modelsTab.addView(section("Coming soon"))
-        listOf("AURA Base" to "1.2 GB  •  smarter answers", "AURA Pro" to "3.8 GB  •  best quality").forEach { (name, detail) ->
-            val soon = rowOf().apply {
-                setPadding(dp(14), dp(12), dp(14), dp(12))
-                background = rounded(glass, 20, glassStroke)
-                addView(badge(R.drawable.ic_model, 0x22FFFFFF, muted))
-                val body = LinearLayout(this@MainActivity).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(14), 0, 0, 0) }
-                body.addView(text(name, 15f, white, true))
-                body.addView(text(detail, 12f, muted))
-                addView(body, LinearLayout.LayoutParams(0, -2, 1f))
-                addView(ImageView(this@MainActivity).apply { setImageResource(R.drawable.ic_lock); setColorFilter(muted) },
-                    LinearLayout.LayoutParams(dp(20), dp(20)))
+        modelsTab.addView(section("Choose your model"))
+        val tierList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        modelsTab.addView(tierList)
+        val memoryInfo = android.app.ActivityManager.MemoryInfo()
+        (getSystemService(ACTIVITY_SERVICE) as android.app.ActivityManager).getMemoryInfo(memoryInfo)
+        val ramGb = (memoryInfo.totalMem / 1_000_000_000L).toInt()
+        refreshModelUi = {
+            val current = ModelCatalog.current
+            modelNameView.text = current.name
+            modelMetaView.text = "${current.sizeLabel}  •  works offline  •  checksum-verified"
+            modelStateView.text = if (modelReady) "ACTIVE" else "SELECTED"
+            modelStateView.setTextColor(if (modelReady) green else lavender)
+            tierList.removeAllViews()
+            ModelCatalog.ALL.forEach { spec ->
+                val isCurrent = spec.id == current.id
+                val onDisk = File(filesDir, spec.fileName).exists()
+                val fits = ramGb + 1 >= spec.minRamGb
+                val tier = card()
+                val head = rowOf()
+                head.addView(badge(R.drawable.ic_model, if (isCurrent) purple else 0x33FFFFFF))
+                val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(14), 0, 0, 0) }
+                body.addView(text(spec.name + if (spec.id == "base") "  ·  Recommended" else "", 15.5f, white, true))
+                body.addView(text("${spec.sizeLabel}  •  ${spec.tagline}", 12f, muted))
+                head.addView(body, LinearLayout.LayoutParams(0, -2, 1f))
+                tier.addView(head)
+                tier.addView(spacer(10))
+                val label = when {
+                    isCurrent && modelReady -> "Active ✓"
+                    !fits -> "Needs ${spec.minRamGb} GB+ RAM"
+                    onDisk -> "Use this model"
+                    else -> "Download  ${spec.sizeLabel}"
+                }
+                val actionButton = cta(label, !(isCurrent && modelReady)) { selectModel(spec) }
+                actionButton.isEnabled = fits && !(isCurrent && modelReady)
+                tier.addView(actionButton)
+                tierList.addView(tier, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
             }
-            modelsTab.addView(soon, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8) })
         }
+        refreshModelUi()
 
         modelsTab.addView(section("Model library"))
         listOf("Gemma", "Danube", "Phi", "Qwen", "Llama").forEach { family ->
@@ -639,17 +668,8 @@ class MainActivity : Activity() {
                 setPadding(0, dp(12), 0, 0)
             }
             if (family == "Qwen") {
-                detail.addView(text("AURA Lite • Qwen 0.5B", 14f, white, true))
-                detail.addView(text("397 MB • CPU • On-device", 12f, muted))
-                detail.addView(spacer(8))
-                detail.addView(cta(if (modelReady) "Loaded and ready ✓" else if (modelFile().exists()) "Load installed model" else "Download AURA Lite") {
-                    when {
-                        modelReady -> status.text = "AURA Lite is already running offline."
-                        modelFile().exists() -> loadExistingModel()
-                        downloadPaused -> continueModelDownload()
-                        else -> confirmModelDownload()
-                    }
-                })
+                detail.addView(text("AURA Lite, Base and Pro are Qwen 2.5 models.", 14f, white, true))
+                detail.addView(text("Pick one under “Choose your model” above. Each is verified before use and runs fully on this device.", 12f, muted))
             } else {
                 detail.addView(text("No downloadable packages for this family are integrated in this build yet.", 12f, muted))
             }
@@ -1324,8 +1344,8 @@ class MainActivity : Activity() {
 
     private fun confirmModelDownload() {
         AlertDialog.Builder(this)
-            .setTitle("Download your AURA AI model?")
-            .setMessage("AURA Lite • approximately 397 MB\n\nInstall the on-device AI model to unlock private offline conversations. The download can be paused and resumed safely, and its checksum is verified before use.")
+            .setTitle("Download ${ModelCatalog.current.name}?")
+            .setMessage("${ModelCatalog.current.name} • ${ModelCatalog.current.sizeLabel}\n\nInstall the on-device AI model to unlock private offline conversations. The download can be paused and resumed safely, and its checksum is verified before use. Use Wi-Fi for large models.")
             .setNegativeButton("Not now", null)
             .setPositiveButton("Download") { _, _ -> startModelDownload() }
             .show()
@@ -1468,6 +1488,7 @@ class MainActivity : Activity() {
                 partial.copyTo(modelFile(), overwrite = true)
                 partial.delete()
             }
+            markVerified(modelFile())
             runOnUiThread {
                 downloadProgress.isIndeterminate = true
                 status.text = "Model verified • loading local AI engine…"
@@ -1482,9 +1503,10 @@ class MainActivity : Activity() {
                 downloadProgress.progress = 1000
                 downloadProgress.visibility = ViewGroup.GONE
                 pauseDownload.visibility = ViewGroup.GONE
-                status.text = "OFFLINE AI READY • Qwen 0.5B • CPU mode"
+                status.text = "OFFLINE AI READY • ${ModelCatalog.current.name} • CPU mode"
                 startHandsFreeListening()
                 download.text = "Model installed ✓"
+                refreshModelUi()
                 download.isEnabled = false
                 input.isEnabled = true
                 send.isEnabled = true
@@ -1508,6 +1530,34 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun verifiedKey(file: File) = "verified_" + file.name
+    private fun isVerified(file: File): Boolean =
+        file.exists() && getSharedPreferences("aura_models", MODE_PRIVATE).getLong(verifiedKey(file), -1L) == file.length()
+    private fun markVerified(file: File) {
+        getSharedPreferences("aura_models", MODE_PRIVATE).edit().putLong(verifiedKey(file), file.length()).apply()
+    }
+
+    /** Switches the active model; loads it if installed, otherwise offers its download. */
+    private fun selectModel(spec: ModelSpec) {
+        if (downloadInProgress) {
+            status.text = "Wait for the current download to finish or pause it first."
+            return
+        }
+        ModelCatalog.select(spec.id)
+        getSharedPreferences("aura_models", MODE_PRIVATE).edit().putString("selected", spec.id).apply()
+        modelReady = false
+        downloadPaused = partialModelFile().exists() && partialModelFile().length() > 0
+        download.isEnabled = true
+        download.text = if (downloadPaused) "Continue download" else "Download model"
+        refreshModelUi()
+        if (modelFile().exists()) {
+            loadExistingModel()
+        } else {
+            status.text = "${spec.name} selected • download it to use it offline"
+            confirmModelDownload()
+        }
+    }
+
     private fun loadExistingModel() {
         download.isEnabled = false
         downloadProgress.visibility = ViewGroup.VISIBLE
@@ -1515,19 +1565,23 @@ class MainActivity : Activity() {
         executor.execute {
             try {
                 val file = modelFile()
-                val digest = MessageDigest.getInstance("SHA-256")
-                FileInputStream(file).use { stream ->
-                    val buffer = ByteArray(1024 * 1024)
-                    while (true) {
-                        val count = stream.read(buffer)
-                        if (count < 0) break
-                        digest.update(buffer, 0, count)
+                if (!isVerified(file)) {
+                    // First load of this file: verify it once, then remember so later launches start instantly.
+                    val digest = MessageDigest.getInstance("SHA-256")
+                    FileInputStream(file).use { stream ->
+                        val buffer = ByteArray(1024 * 1024)
+                        while (true) {
+                            val count = stream.read(buffer)
+                            if (count < 0) break
+                            digest.update(buffer, 0, count)
+                        }
                     }
-                }
-                val actual = digest.digest().joinToString("") { "%02x".format(it) }
-                if (!actual.equals(ModelCatalog.SHA256, ignoreCase = true)) {
-                    file.delete()
-                    throw IllegalStateException("Installed model failed integrity verification. Download it again.")
+                    val actual = digest.digest().joinToString("") { "%02x".format(it) }
+                    if (!actual.equals(ModelCatalog.SHA256, ignoreCase = true)) {
+                        file.delete()
+                        throw IllegalStateException("Installed model failed integrity verification. Download it again.")
+                    }
+                    markVerified(file)
                 }
                 runOnUiThread {
                     downloadProgress.isIndeterminate = true
@@ -1539,7 +1593,8 @@ class MainActivity : Activity() {
                     downloadProgress.isIndeterminate = false
                     downloadProgress.visibility = ViewGroup.GONE
                     download.text = "Model installed ✓"
-                    status.text = "OFFLINE AI READY • Qwen 0.5B • CPU mode"
+                    refreshModelUi()
+                    status.text = "OFFLINE AI READY • ${ModelCatalog.current.name} • CPU mode"
                     startHandsFreeListening()
                     input.isEnabled = true
                     send.isEnabled = true
