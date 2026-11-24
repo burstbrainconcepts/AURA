@@ -66,11 +66,14 @@ class MainActivity : Activity() {
     private var downloadPaused = false
     private var modelReady = false
     private var pendingLocationSettings = false
+    private var shellView: FrameLayout? = null
+    private var onboarding: OnboardingFlow? = null
 
     companion object {
         const val EXTRA_START_LISTENING = "com.burstbrainconcepts.aura.extra.START_LISTENING"
         const val EXTRA_VOICE_PROMPT = "com.burstbrainconcepts.aura.extra.VOICE_PROMPT"
         private const val REQUEST_WAKE_AUDIO = 7413
+        private const val REQUEST_ONBOARDING = 7414
         private const val REQUEST_DEVICE_ADMIN = 7411
         private const val REQUEST_LOCATION_PERMISSION = 7412
     }
@@ -574,17 +577,30 @@ class MainActivity : Activity() {
             pageHost.removeAllViews()
             pageHost.addView(pageViews[name], FrameLayout.LayoutParams(-1, -1))
             navButtons.forEach { (key, b) ->
+                val tint = if (key == name) white else muted
                 b.background = rounded(if (key == name) purple else 0xFF160D2D.toInt(), 15f)
-                b.setTextColor(if (key == name) white else muted)
+                b.setTextColor(tint)
+                b.compoundDrawables[1]?.setTint(tint)
             }
         }
         showPage = { name -> selectPage(name) }
         listOf("Home", "Chat", "Downloads", "Notifications", "Settings").forEach { name ->
-            val icon = when (name) { "Home" -> "⌂"; "Chat" -> "▢"; "Downloads" -> "⇩"; "Notifications" -> "♧"; else -> "⚙" }
+            val iconRes = when (name) {
+                "Home" -> R.drawable.ic_home
+                "Chat" -> R.drawable.ic_chat
+                "Downloads" -> R.drawable.ic_download
+                "Notifications" -> R.drawable.ic_bell
+                else -> R.drawable.ic_settings
+            }
+            val label = if (name == "Notifications") "Notifs" else name
             val b = Button(this).apply {
-                text = "$icon\n$name"; isAllCaps = false; textSize = 9f
+                text = label; isAllCaps = false; textSize = 10f
                 setTextColor(muted); background = rounded(0xFF160D2D.toInt(), 15f)
-                stateListAnimator = null; setPadding(2, 8, 2, 8)
+                stateListAnimator = null; setPadding(2, 10, 2, 8)
+                val iconSize = (22 * resources.displayMetrics.density).toInt()
+                val icon = resources.getDrawable(iconRes, theme).mutate().apply { setBounds(0, 0, iconSize, iconSize); setTint(muted) }
+                setCompoundDrawables(null, icon, null, null)
+                compoundDrawablePadding = (3 * resources.displayMetrics.density).toInt()
                 setOnClickListener { selectPage(name) }
             }
             navButtons[name] = b
@@ -603,6 +619,7 @@ class MainActivity : Activity() {
             insets
         }
         val shell = FrameLayout(this).apply {
+            shellView = this
             setBackgroundColor(ink)
             addView(root, FrameLayout.LayoutParams(-1, -1))
         }
@@ -1081,18 +1098,22 @@ class MainActivity : Activity() {
             confirmModelDownload()
             return
         }
-        AlertDialog.Builder(this)
-            .setTitle("✦  Welcome to AURA")
-            .setMessage("Your private AI companion is ready. Chat, create and think with an assistant designed around your device and your privacy.\n\nDownload the starter AI model once to enable offline conversations. You can explore first and download later.")
-            .setCancelable(false)
-            .setNegativeButton("Explore first") { _, _ ->
-                preferences.edit().putBoolean("welcome_seen", true).apply()
-            }
-            .setPositiveButton("Get started") { _, _ ->
-                preferences.edit().putBoolean("welcome_seen", true).apply()
-                confirmModelDownload()
-            }
-            .show()
+        val shell = shellView ?: return
+        preferences.edit().putBoolean("welcome_seen", true).apply()
+        onboarding = OnboardingFlow(
+            this,
+            shell,
+            { microphone, notifications ->
+                val wanted = mutableListOf<String>()
+                if (microphone) wanted.add(android.Manifest.permission.RECORD_AUDIO)
+                if (notifications && Build.VERSION.SDK_INT >= 33) wanted.add(android.Manifest.permission.POST_NOTIFICATIONS)
+                val missing = wanted.filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
+                if (missing.isNotEmpty()) requestPermissions(missing.toTypedArray(), REQUEST_ONBOARDING)
+            },
+            { startModelDownload() },
+            { if (downloadInProgress) pauseModelDownload() else continueModelDownload() },
+            { page -> onboarding = null; showPage(page) }
+        ).also { it.start() }
     }
 
     private fun confirmModelDownload() {
@@ -1178,6 +1199,7 @@ class MainActivity : Activity() {
                                 runOnUiThread {
                                     downloadProgress.progress = percent
                                     status.text = "Downloading AI model • ${downloaded / 1_000_000} MB / ${total / 1_000_000} MB • ${percent / 10}%"
+                                    onboarding?.updateProgress(percent, "Downloading… ${downloaded / 1_000_000} MB / ${total / 1_000_000} MB (${percent / 10}%)")
                                 }
                             }
                             output.fd.sync()
@@ -1207,6 +1229,7 @@ class MainActivity : Activity() {
                     download.text = "Continue download"
                     pauseDownload.visibility = ViewGroup.GONE
                     status.text = "Download paused • ${partial.length() / 1_000_000} MB saved • tap Continue when ready"
+                    onboarding?.setPaused(true)
                 }
                 return
             }
@@ -1226,6 +1249,7 @@ class MainActivity : Activity() {
                     runOnUiThread {
                         downloadProgress.progress = percent
                         status.text = "Verifying model integrity • ${percent / 10}%"
+                        onboarding?.updateProgress(percent, "Verifying model integrity… ${percent / 10}%")
                     }
                 }
             }
@@ -1262,6 +1286,7 @@ class MainActivity : Activity() {
                 speakToggle.isEnabled = true
                 submitWakePrompt()
                 append("AURA", "I'm ready. Your messages are processed locally on this device. Tap the microphone for on-device speech input or enable voice replies if an offline voice is installed.")
+                onboarding?.showComplete()
             }
         } catch (error: Exception) {
             downloadInProgress = false
@@ -1271,6 +1296,8 @@ class MainActivity : Activity() {
                 downloadPaused = partial.exists() && partial.length() > 0
                 pauseDownload.visibility = ViewGroup.GONE
                 status.text = "Model setup paused safely: ${error.message ?: "network or setup error"}"
+                onboarding?.updateProgress(downloadProgress.progress, "Paused: ${error.message ?: "network or setup error"}")
+                onboarding?.setPaused(true)
             }
         }
     }
