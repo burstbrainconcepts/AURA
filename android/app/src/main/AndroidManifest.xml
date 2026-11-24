@@ -31,7 +31,8 @@
         </activity>
         <service
             android:name=".AuraFloatingAssistantService"
-            android:exported="false" />
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
         <service
             android:name=".AuraWakeWordService"
             android:exported="false"

@@ -26,6 +26,18 @@ A personal AI assistant, closer to Siri/Google Assistant but with its own AI bra
 | 8 | Local-first, no silent cloud | With airplane mode on, chat and voice still work | **BUILT-UNTESTED** | Code avoids cloud speech and downloads the model once from Hugging Face with a SHA-256 check. Untested offline. |
 | 9 | Same assistant on Android / iOS / desktop | Core checks above pass on each | **MISSING** | Platforms share design intent, not code. iOS is a simulator-only build; desktop has no wake word. |
 
+
+## Product direction (clarified by the user, 24 Nov)
+
+AURA is **not primarily a chat app**. It should (1) record and understand the user's voice, (2) intelligently store it (what was said, how it sounded, and who is speaking), and (3) live as a floating bubble: the user closes the app, taps the bubble from any app, and AURA answers, by voice when voice replies are on.
+
+| Stage | Capability | Status |
+|---|---|---|
+| 1 | Floating bubble that listens on tap, answers with the on-device model, speaks the reply, then listens again; shared model between app and bubble | **BUILT-UNTESTED** (compiles via CI; Android 14 background-microphone rules may block it; needs phone test) |
+| 2 | Record on tap (raw audio), transcribe on device (whisper.cpp), summarise and tag with the model, encrypted searchable store, "what did I say about X?" by voice | **MISSING** |
+| 3 | Vocal profile from the audio: pitch, loudness, pace, pauses. Honest label: acoustic descriptors, not emotion claims | **MISSING** |
+| 4 | Speaker recognition (is this my voice?) via a speaker-embedding model. Convenience only, never authorisation | **MISSING** |
+
 ## Known platform limits (state honestly, do not hide)
 
 - **iOS** does not allow third-party apps unrestricted always-on background listening. Best achievable: foreground voice plus Siri/App Shortcuts.

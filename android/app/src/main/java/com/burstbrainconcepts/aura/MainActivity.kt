@@ -131,7 +131,8 @@ class MainActivity : Activity() {
             } }
         )
         voice.initialize()
-        speakToggle.text = "Voice replies: on"
+        speakReplies = getSharedPreferences("aura_presence", MODE_PRIVATE).getBoolean("voice_replies", true)
+        speakToggle.text = if (speakReplies) "Voice replies: on" else "Voice replies: off"
         if (intent?.getBooleanExtra(EXTRA_START_LISTENING, false) == true) pendingHandsFreeListen = true
         pendingWakePrompt = intent?.getStringExtra(EXTRA_VOICE_PROMPT).orEmpty()
         try {
@@ -461,6 +462,7 @@ class MainActivity : Activity() {
             isEnabled = false
             setOnClickListener {
                 speakReplies = !speakReplies
+                getSharedPreferences("aura_presence", MODE_PRIVATE).edit().putBoolean("voice_replies", speakReplies).apply()
                 speakToggle.text = if (speakReplies) "Voice replies: on" else "Voice replies: off"
                 if (!speakReplies) voice.stopSpeaking()
             }
@@ -931,7 +933,7 @@ class MainActivity : Activity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
             AlertDialog.Builder(this)
                 .setTitle("Allow AURA to appear above other apps?")
-                .setMessage("Android requires your explicit permission for the floating AURA launcher. The bubble only opens AURA or dismisses itself; it does not listen, record, or read other apps.")
+                .setMessage("Android requires your explicit permission for the floating AURA launcher. Tap the bubble to talk to AURA from any app. It listens only after you tap it and Android shows a notification while the microphone is on. It does not read other apps. Press and hold the bubble to hide it.")
                 .setNegativeButton("Not now", null)
                 .setPositiveButton("Open permission settings") { _, _ ->
                     val permissionIntent = Intent(
@@ -948,13 +950,13 @@ class MainActivity : Activity() {
             startService(serviceIntent)
             getSharedPreferences("aura_presence", MODE_PRIVATE).edit().putBoolean("floating_enabled", false).apply()
             overlayButton.text = "Enable floating AURA bubble"
-            status.text = "Floating AURA launcher dismissed."
+            status.text = "AURA bubble hidden."
         } else {
             serviceIntent.action = AuraFloatingAssistantService.ACTION_SHOW
             startService(serviceIntent)
             getSharedPreferences("aura_presence", MODE_PRIVATE).edit().putBoolean("floating_enabled", true).apply()
             overlayButton.text = "Dismiss floating AURA bubble"
-            status.text = "Floating AURA launcher enabled. Tap AURA to open; × to dismiss."
+            status.text = "AURA bubble is on. Tap it to talk; press and hold to hide."
         }
     }
 
@@ -1614,13 +1616,13 @@ class MainActivity : Activity() {
     }
 
     private fun loadNativeModel(path: String): Boolean = try {
-        NativeLlama.nativeLoadModel(path)
+        AssistantEngine.loadModel(path)
     } catch (error: UnsatisfiedLinkError) {
         throw IllegalStateException("AURA native inference library is not packaged in this APK.", error)
     }
 
     private fun generateNative(systemPrompt: String, prompt: String, maxTokens: Int): String = try {
-        NativeLlama.nativeGenerate(systemPrompt, prompt, maxTokens)
+        AssistantEngine.generate(systemPrompt, prompt, maxTokens)
     } catch (error: UnsatisfiedLinkError) {
         throw IllegalStateException("AURA native inference library is not available in this APK.", error)
     }
@@ -1716,7 +1718,10 @@ class MainActivity : Activity() {
     override fun onDestroy() {
         voice.shutdown()
         executor.shutdownNow()
-        try { NativeLlama.nativeUnloadModel() } catch (_: UnsatisfiedLinkError) { }
+        // Keep the model loaded while the floating voice bubble is enabled so it can still answer.
+        if (!getSharedPreferences("aura_presence", MODE_PRIVATE).getBoolean("floating_enabled", false)) {
+            AssistantEngine.unload()
+        }
         super.onDestroy()
     }
 }
