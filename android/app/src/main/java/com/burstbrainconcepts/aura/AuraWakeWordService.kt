@@ -12,6 +12,8 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.SystemClock
+import android.provider.Settings
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -29,6 +31,7 @@ class AuraWakeWordService : Service(), RecognitionListener {
     private var recognizer: SpeechRecognizer? = null
     private var listening = false
     private var stoppedByUser = false
+    private var holdUntil = 0L
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -110,6 +113,11 @@ class AuraWakeWordService : Service(), RecognitionListener {
 
     private fun startRecognizer() {
         if (stoppedByUser || listening) return
+        // Stay quiet while the voice bubble is talking so the two never fight for the microphone.
+        if (SystemClock.elapsedRealtime() < holdUntil || AuraFloatingAssistantService.panelOpen) {
+            scheduleRestart(1200)
+            return
+        }
         if (Build.VERSION.SDK_INT < 31 || !SpeechRecognizer.isOnDeviceRecognitionAvailable(this)) return
         try {
             if (recognizer == null) {
@@ -137,28 +145,48 @@ class AuraWakeWordService : Service(), RecognitionListener {
     override fun onResults(results: android.os.Bundle?) {
         listening = false
         val candidates = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION).orEmpty()
-        val phrase = candidates.firstOrNull { normalise(it).contains("hey aura") || normalise(it).startsWith("aura ") || normalise(it) == "aura" }
-        if (phrase != null) {
-            val cleaned = Regex("(?i)^.*?hey\\s+aura[, ]*").replaceFirst(phrase, "")
-                .let { Regex("(?i)^aura[, ]*").replace(it, "") }
-                .trim()
-            val launch = Intent(this, MainActivity::class.java).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                putExtra(MainActivity.EXTRA_START_LISTENING, cleaned.isBlank())
-                if (cleaned.isNotBlank()) putExtra(MainActivity.EXTRA_VOICE_PROMPT, cleaned)
-            }
-            try {
-                startActivity(launch)
-            } catch (_: Exception) {
-                updateNotification("Wake phrase detected • open AURA to continue")
-            }
-            stoppedByUser = true
-            stopListening()
-            stopForeground(STOP_FOREGROUND_REMOVE)
-            stopSelf()
-        } else {
-            scheduleRestart(350)
+        val phrases = WakePhrases.load(this)
+        var heard: String? = null
+        for (candidate in candidates) {
+            val rest = WakePhrases.match(candidate, phrases)
+            if (rest != null) { heard = rest; break }
         }
+        if (heard == null) {
+            scheduleRestart(350)
+            return
+        }
+        holdUntil = SystemClock.elapsedRealtime() + 6000
+        val canShowBubble = Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(this)
+        if (canShowBubble) {
+            // Bring up the voice bubble over whatever app is open; keep listening for the next call afterwards.
+            try {
+                startService(
+                    Intent(this, AuraFloatingAssistantService::class.java)
+                        .setAction(AuraFloatingAssistantService.ACTION_WAKE)
+                        .putExtra(AuraFloatingAssistantService.EXTRA_PROMPT, heard)
+                )
+                updateNotification("Heard you • AURA is listening")
+            } catch (_: Exception) {
+                updateNotification("Wake phrase heard • open AURA to continue")
+            }
+            scheduleRestart(1500)
+            return
+        }
+        // Without the "display over other apps" permission the only option is to open the app.
+        val launch = Intent(this, MainActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            putExtra(MainActivity.EXTRA_START_LISTENING, heard.isBlank())
+            if (heard.isNotBlank()) putExtra(MainActivity.EXTRA_VOICE_PROMPT, heard)
+        }
+        try {
+            startActivity(launch)
+        } catch (_: Exception) {
+            updateNotification("Wake phrase detected • open AURA to continue")
+        }
+        stoppedByUser = true
+        stopListening()
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        stopSelf()
     }
 
     private fun normalise(value: String): String = value.lowercase(Locale.ROOT)

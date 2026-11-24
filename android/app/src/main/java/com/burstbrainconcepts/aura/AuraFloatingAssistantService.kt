@@ -48,6 +48,7 @@ class AuraFloatingAssistantService : Service() {
     private var memory: EncryptedMemoryStore? = null
     private val history = mutableListOf<Pair<String, String>>()
     @Volatile private var busy = false
+    private var wakeOnly = false
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
@@ -67,6 +68,19 @@ class AuraFloatingAssistantService : Service() {
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
             stopSelf()
+            return START_NOT_STICKY
+        }
+        if (intent?.action == ACTION_WAKE) {
+            // Called by name: open the panel at once. If the user has the bubble turned off,
+            // the bubble only lasts for this conversation.
+            wakeOnly = !getSharedPreferences("aura_presence", MODE_PRIVATE).getBoolean("floating_enabled", false)
+            showBubble()
+            if (panel == null) expand()
+            val spoken = intent.getStringExtra(EXTRA_PROMPT).orEmpty()
+            if (spoken.isNotBlank()) {
+                voice?.cancelListening()
+                onHeard(spoken)
+            }
             return START_NOT_STICKY
         }
         showBubble()
@@ -245,6 +259,7 @@ class AuraFloatingAssistantService : Service() {
         try {
             wm.addView(card, params)
             panel = card
+            panelOpen = true
             bubble?.visibility = View.GONE
         } catch (_: Exception) {
             panel = null
@@ -400,12 +415,18 @@ class AuraFloatingAssistantService : Service() {
             try { windowManager?.removeView(current) } catch (_: Exception) { }
         }
         panel = null
+        panelOpen = false
         statusView = null
         heardView = null
         replyView = null
         busy = false
         bubble?.visibility = View.VISIBLE
         try { stopForeground(STOP_FOREGROUND_REMOVE) } catch (_: Exception) { }
+        if (wakeOnly) {
+            wakeOnly = false
+            removeBubble(false)
+            stopSelf()
+        }
     }
 
     private fun removeBubble(disableFeature: Boolean = false) {
@@ -417,6 +438,7 @@ class AuraFloatingAssistantService : Service() {
     }
 
     override fun onDestroy() {
+        wakeOnly = false
         collapse()
         removeBubble()
         voice?.shutdown()
@@ -430,6 +452,10 @@ class AuraFloatingAssistantService : Service() {
         const val ACTION_HIDE = "com.burstbrainconcepts.aura.action.HIDE_FLOATING"
         const val ACTION_SHOW_SESSION = "com.burstbrainconcepts.aura.action.SHOW_SESSION"
         const val ACTION_HIDE_SESSION = "com.burstbrainconcepts.aura.action.HIDE_SESSION"
+        const val ACTION_WAKE = "com.burstbrainconcepts.aura.action.WAKE_BUBBLE"
+        const val EXTRA_PROMPT = "com.burstbrainconcepts.aura.extra.WAKE_PROMPT"
+        /** True while the voice panel is on screen; the wake listener waits for it to close. */
+        @Volatile var panelOpen = false
         private const val CHANNEL_ID = "aura_voice_bubble"
         private const val NOTIFICATION_ID = 7402
     }

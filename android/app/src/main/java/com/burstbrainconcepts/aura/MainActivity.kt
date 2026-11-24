@@ -72,6 +72,7 @@ class MainActivity : Activity() {
     private var shellView: FrameLayout? = null
     private var onboarding: OnboardingFlow? = null
     private var refreshModelUi: () -> Unit = {}
+    private var wakePhrasesButton: Button? = null
 
     companion object {
         const val EXTRA_START_LISTENING = "com.burstbrainconcepts.aura.extra.START_LISTENING"
@@ -775,6 +776,8 @@ class MainActivity : Activity() {
         settings.addView(settingsRow(overlayButton, R.drawable.ic_layers))
         wakeButton = rowButton(if (wakeListeningEnabled()) "Hey AURA wake listening: on" else "Hey AURA wake listening: off") { toggleWakeListening() }
         settings.addView(settingsRow(wakeButton, R.drawable.ic_wave))
+        wakePhrasesButton = rowButton("Names AURA answers to: " + WakePhrases.display(this)) { showWakePhrasesDialog() }
+        settings.addView(settingsRow(wakePhrasesButton!!, R.drawable.ic_edit))
         settings.addView(text("Wake listening is optional. Android shows a persistent microphone notification while it is active.", 12f, muted).apply { setPadding(dp(4), dp(2), dp(4), 0) })
         settings.addView(section("Memory & security"))
         memoryButton = rowButton(if (memory.enabled) "Memory: on" else "Memory: off") { showMemorySettings() }
@@ -922,6 +925,41 @@ class MainActivity : Activity() {
         pendingWakePrompt = ""
         input.setText(prompt)
         sendMessage()
+    }
+
+    /** Lets the user type the names AURA responds to, e.g. "Hey Aura, Aura, Jarvis". */
+    private fun showWakePhrasesDialog() {
+        val field = EditText(this).apply {
+            setText(WakePhrases.display(this@MainActivity))
+            setSelection(text.length)
+            hint = "Hey Aura, Aura"
+            setSingleLine(true)
+            setPadding(48, 32, 48, 16)
+        }
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("Names AURA answers to")
+            .setMessage("Separate names with commas, up to ${WakePhrases.MAX_PHRASES}. A name must start what you say, as in “Hey Aura, what's next?”. Short or common words can wake AURA by accident, so pick something distinctive.")
+            .setView(field)
+            .setNegativeButton("Cancel", null)
+            .setNeutralButton("Reset") { _, _ ->
+                WakePhrases.reset(this)
+                wakePhrasesButton?.text = "Names AURA answers to: " + WakePhrases.display(this)
+            }
+            .setPositiveButton("Save", null)
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val problem = WakePhrases.save(this, field.text.toString())
+                if (problem != null) {
+                    field.error = problem
+                } else {
+                    wakePhrasesButton?.text = "Names AURA answers to: " + WakePhrases.display(this)
+                    status.text = "AURA will answer to: " + WakePhrases.display(this)
+                    dialog.dismiss()
+                }
+            }
+        }
+        dialog.show()
     }
 
     private fun resumeWakeListening() {
