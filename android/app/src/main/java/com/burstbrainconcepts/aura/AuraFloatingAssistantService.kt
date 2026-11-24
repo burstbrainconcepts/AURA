@@ -49,6 +49,20 @@ class AuraFloatingAssistantService : Service() {
     private val history = mutableListOf<Pair<String, String>>()
     @Volatile private var busy = false
     private var wakeOnly = false
+    private val idleTimeout = Runnable {
+        setStatus("AURA went quiet.")
+        collapse()
+    }
+
+    /** Starts the countdown after which a silent panel closes itself. */
+    private fun armIdle() {
+        main.removeCallbacks(idleTimeout)
+        if (panel != null) main.postDelayed(idleTimeout, IDLE_MS)
+    }
+
+    private fun cancelIdle() {
+        main.removeCallbacks(idleTimeout)
+    }
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
@@ -276,7 +290,9 @@ class AuraFloatingAssistantService : Service() {
             { spoken -> main.post { onHeard(spoken) } },
             { message -> main.post { setStatus(message) } },
             { main.post { setStatus("AURA went quiet."); collapse() } },
-            { main.post { afterSpeaking() } }
+            { main.post { afterSpeaking() } },
+            { main.post { cancelIdle() } },
+            { main.post { if (panel != null && !busy) armIdle() } }
         ).also { it.initialize() }
     }
 
@@ -290,6 +306,7 @@ class AuraFloatingAssistantService : Service() {
         }
         if (busy) return
         startMicForeground()
+        armIdle()
         voice?.startListening()
     }
 
@@ -299,6 +316,7 @@ class AuraFloatingAssistantService : Service() {
             "be quiet", "stop speaking", "silence" -> {
                 voice?.stopSpeaking()
                 setStatus("Stopped. Tap the mic to talk again.")
+                armIdle()
             }
             "go to sleep", "end conversation", "stop conversation", "goodbye aura", "goodbye" -> collapse()
             "continue listening", "listen again" -> listen()
@@ -320,6 +338,7 @@ class AuraFloatingAssistantService : Service() {
     private fun ask(text: String) {
         if (text.isBlank() || busy) return
         busy = true
+        cancelIdle()
         heardView?.text = "“$text”"
         heardView?.visibility = View.VISIBLE
         replyView?.visibility = View.GONE
@@ -356,11 +375,13 @@ class AuraFloatingAssistantService : Service() {
         if (panel == null) return
         replyView?.text = text
         replyView?.visibility = View.VISIBLE
-        if (speak && voiceRepliesOn()) {
+        if (speak && voiceRepliesOn() && voice?.canSpeak() == true) {
             setStatus("Speaking…")
             voice?.speak(text)
         } else {
-            setStatus("Tap the mic to talk again.")
+            // Nothing will be spoken, so give the user the same 5 seconds to follow up.
+            setStatus("Say something, or tap the mic.")
+            armIdle()
         }
     }
 
@@ -408,6 +429,7 @@ class AuraFloatingAssistantService : Service() {
 
     /** Closes the panel, stops listening and speaking, and returns to just the bubble. */
     private fun collapse() {
+        cancelIdle()
         voice?.stopSpeaking()
         voice?.cancelListening()
         val current = panel
@@ -456,6 +478,8 @@ class AuraFloatingAssistantService : Service() {
         const val EXTRA_PROMPT = "com.burstbrainconcepts.aura.extra.WAKE_PROMPT"
         /** True while the voice panel is on screen; the wake listener waits for it to close. */
         @Volatile var panelOpen = false
+        /** How long AURA waits for you to speak before the panel goes away. */
+        private const val IDLE_MS = 5000L
         private const val CHANNEL_ID = "aura_voice_bubble"
         private const val NOTIFICATION_ID = 7402
     }

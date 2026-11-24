@@ -25,7 +25,11 @@ class OfflineVoiceController(
     private val onStatus: (String) -> Unit,
     private val onSilenceTimeout: () -> Unit,
     /** Called (on a background thread) when a spoken reply has finished or failed. */
-    private val onSpeechDone: () -> Unit = {}
+    private val onSpeechDone: () -> Unit = {},
+    /** Called when the user starts talking. */
+    private val onSpeechStart: () -> Unit = {},
+    /** Called when a listening round ends without a usable result (silence, noise, error). */
+    private val onListenEnded: () -> Unit = {}
 ) : TextToSpeech.OnInitListener, RecognitionListener {
     private var recognizer: SpeechRecognizer? = null
     private var tts: TextToSpeech? = null
@@ -81,6 +85,8 @@ class OfflineVoiceController(
         tts?.speak(text.take(4000), TextToSpeech.QUEUE_FLUSH, null, "aura-reply")
     }
 
+    fun canSpeak(): Boolean = offlineTtsReady
+
     fun stopSpeaking() { tts?.stop() }
 
     fun cancelListening() {
@@ -120,7 +126,7 @@ class OfflineVoiceController(
     }
 
     override fun onReadyForSpeech(params: Bundle?) { onStatus("Listening...") }
-    override fun onBeginningOfSpeech() {}
+    override fun onBeginningOfSpeech() { onSpeechStart() }
     override fun onRmsChanged(rmsdB: Float) {}
     override fun onBufferReceived(buffer: ByteArray?) {}
     override fun onEndOfSpeech() { onStatus("Processing speech on device...") }
@@ -132,6 +138,7 @@ class OfflineVoiceController(
             else -> "Offline speech recognition error ($error)."
         }
         onStatus(message)
+        if (error != SpeechRecognizer.ERROR_SPEECH_TIMEOUT) onListenEnded()
     }
     override fun onResults(results: Bundle?) {
         val text = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()
